@@ -122,8 +122,7 @@ io.on('connection', (socket) => {
         .from('user_queue')
         .insert({
           user_id: socket.userId,
-          chat_type: chatType,
-          status: 'waiting'
+          chat_type: chatType
         });
 
       if (queueError) {
@@ -152,7 +151,7 @@ io.on('connection', (socket) => {
         .from('messages')
         .insert({
           room_id: roomId,
-          sender_id: socket.userId,
+          user_id: socket.userId,
           content: message,
           message_type: messageType
         });
@@ -242,7 +241,6 @@ async function findMatch(userId, chatType) {
       .from('user_queue')
       .select('user_id')
       .eq('chat_type', chatType)
-      .eq('status', 'waiting')
       .neq('user_id', userId)
       .limit(1)
       .single();
@@ -253,22 +251,23 @@ async function findMatch(userId, chatType) {
     }
 
     const otherUserId = waitingUser.user_id;
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Create chat room
-    const { error: roomError } = await supabase
+    const { data: room, error: roomError } = await supabase
       .from('chat_rooms')
       .insert({
-        id: roomId,
         status: 'active',
-        chat_type: chatType,
         created_at: new Date().toISOString()
-      });
+      })
+      .select()
+      .single();
 
     if (roomError) {
       console.error('Error creating room:', roomError);
       return;
     }
+
+    const roomId = room.id;
 
     // Add participants
     const { error: participantsError } = await supabase
