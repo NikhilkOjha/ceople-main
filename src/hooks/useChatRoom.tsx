@@ -25,7 +25,7 @@ interface ChatRoomState {
   error: string | null;
 }
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://ceople-main.onrender.com';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://ceople-backend-docker.onrender.com';
 
 export const useChatRoom = () => {
   const [state, setState] = useState<ChatRoomState>({
