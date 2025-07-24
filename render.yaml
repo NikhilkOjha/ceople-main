@@ -1,16 +1,16 @@
 services:
   - type: web
-    name: ceople-backend
-    env: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    name: ceople-backend-docker
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: NODE_ENV
         value: production
       - key: SUPABASE_URL
-        value: https://arluwakftvvbioprdsmw.supabase.co
-      - key: FRONTEND_URL
-        value: https://ceople-main.vercel.app
+        sync: false
       - key: SUPABASE_SERVICE_KEY
-        sync: false 
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true 

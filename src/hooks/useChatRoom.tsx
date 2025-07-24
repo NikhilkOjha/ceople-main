@@ -1,342 +1,355 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
-
-interface ChatRoom {
-  id: string;
-  status: 'waiting' | 'active' | 'ended';
-  created_at: string;
-}
+import { supabase } from '../integrations/supabase/client';
 
 interface Message {
   id: string;
-  room_id: string;
-  user_id: string;
+  roomId: string;
+  senderId: string;
   content: string;
-  message_type: 'text' | 'system' | 'emoji';
-  created_at: string;
+  messageType: 'text' | 'image';
+  timestamp: string;
 }
 
-interface Participant {
-  id: string;
-  room_id: string;
-  user_id: string;
-  is_active: boolean;
+interface ChatRoomState {
+  isConnected: boolean;
+  isInQueue: boolean;
+  isInRoom: boolean;
+  roomId: string | null;
+  messages: Message[];
+  remoteStream: MediaStream | null;
+  localStream: MediaStream | null;
+  isVideoEnabled: boolean;
+  isAudioEnabled: boolean;
+  isScreenSharing: boolean;
+  error: string | null;
 }
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://ceople-main.onrender.com';
 
 export const useChatRoom = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [isInQueue, setIsInQueue] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [state, setState] = useState<ChatRoomState>({
+    isConnected: false,
+    isInQueue: false,
+    isInRoom: false,
+    roomId: null,
+    messages: [],
+    remoteStream: null,
+    localStream: null,
+    isVideoEnabled: true,
+    isAudioEnabled: true,
+    isScreenSharing: false,
+    error: null
+  });
 
-  // WebRTC refs
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const socketRef = useRef<Socket | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-
-  // Initialize WebRTC
-  const initializeWebRTC = async () => {
-    try {
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-      
-      localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      // Create peer connection with better ICE servers
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' }
-        ],
-        iceCandidatePoolSize: 10
-      });
-
-      // Add local stream tracks
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
-
-      // Handle remote stream
-      pc.ontrack = (event) => {
-        const [remoteStream] = event.streams;
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-        }
-      };
-
-      // Handle connection state changes
-      pc.onconnectionstatechange = () => {
-        console.log('Connection state:', pc.connectionState);
-        if (pc.connectionState === 'connected') {
-          toast({
-            title: "Connected!",
-            description: "Video chat connection established successfully.",
-          });
-        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-          toast({
-            title: "Connection Lost",
-            description: "Video chat connection was lost. Trying to reconnect...",
-            variant: "destructive",
-          });
-        }
-      };
-
-      // Handle ICE connection state changes
-      pc.oniceconnectionstatechange = () => {
-        console.log('ICE connection state:', pc.iceConnectionState);
-      };
-
-      // Handle ICE candidates
-      pc.onicecandidate = (event) => {
-        if (event.candidate && currentRoom && socketRef.current) {
-          socketRef.current.emit('webrtc-signal', {
-            roomId: currentRoom.id,
-            signal: { type: 'ice-candidate', candidate: event.candidate },
-            targetUserId: null // Broadcast to all in room
-          });
-        }
-      };
-
-      peerConnectionRef.current = pc;
-    } catch (error) {
-      console.error('Error initializing WebRTC:', error);
-      toast({
-        title: "Camera/Microphone Error",
-        description: "Please allow camera and microphone access to use video chat.",
-        variant: "destructive",
-      });
-    }
-  };
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
   // Initialize Socket.IO connection
   const initializeSocket = useCallback(async () => {
-    if (!user) return;
-
     try {
-      // Get session token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        throw new Error('No session token');
+        throw new Error('No authentication token');
       }
 
-      // Connect to backend
-      const socket = io(process.env.REACT_APP_BACKEND_URL || 'https://ceople-main.onrender.com', {
+      const socket = io(BACKEND_URL, {
         auth: {
           token: session.access_token
         },
-        transports: ['polling']
+        transports: ['websocket', 'polling'], // Allow both WebSocket and polling
+        timeout: 20000,
+        forceNew: true
       });
 
       socket.on('connect', () => {
         console.log('Connected to backend');
+        setState(prev => ({ ...prev, isConnected: true, error: null }));
       });
 
-      socket.on('match-found', async (data) => {
-        const { roomId } = data;
-        setCurrentRoom({ id: roomId, status: 'active', created_at: new Date().toISOString() });
-        setIsInQueue(false);
-        setIsConnecting(false);
-
-        // Initialize WebRTC for video chat
-        await initializeWebRTC();
-
-        toast({
-          title: "Match Found!",
-          description: "You've been connected with a stranger.",
-        });
+      socket.on('disconnect', () => {
+        console.log('Disconnected from backend');
+        setState(prev => ({ 
+          ...prev, 
+          isConnected: false, 
+          isInQueue: false, 
+          isInRoom: false 
+        }));
       });
 
-      socket.on('waiting-for-match', () => {
-        setIsInQueue(true);
-        setIsConnecting(false);
+      socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+        setState(prev => ({ ...prev, error: 'Failed to connect to server' }));
       });
 
-      socket.on('new-message', (message: Message) => {
-        setMessages(prev => [...prev, message]);
+      socket.on('match-found', (data) => {
+        console.log('Match found:', data);
+        setState(prev => ({ 
+          ...prev, 
+          isInQueue: false, 
+          isInRoom: true, 
+          roomId: data.roomId 
+        }));
+        initializeWebRTC();
       });
 
-      socket.on('webrtc-signal', async (data) => {
-        const { signal, fromUserId } = data;
-        
-        if (fromUserId === user?.id || !peerConnectionRef.current) return;
-
-        try {
-          if (signal.type === 'offer') {
-            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
-            const answer = await peerConnectionRef.current.createAnswer();
-            await peerConnectionRef.current.setLocalDescription(answer);
-            
-            socket.emit('webrtc-signal', {
-              roomId: currentRoom?.id,
-              signal: answer,
-              targetUserId: fromUserId
-            });
-          } else if (signal.type === 'answer') {
-            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
-          } else if (signal.type === 'ice-candidate') {
-            await peerConnectionRef.current.addIceCandidate(signal.candidate);
-          }
-        } catch (error) {
-          console.error('Error handling WebRTC signal:', error);
-        }
+      socket.on('new-message', (message) => {
+        setState(prev => ({
+          ...prev,
+          messages: [...prev.messages, message]
+        }));
       });
 
-      socket.on('room-left', (data) => {
-        const { roomId } = data;
-        if (currentRoom?.id === roomId) {
-          leaveRoom();
-        }
+      socket.on('webrtc-signal', (data) => {
+        handleWebRTCSignal(data);
+      });
+
+      socket.on('user-left', (data) => {
+        console.log('User left:', data);
+        setState(prev => ({ 
+          ...prev, 
+          isInRoom: false, 
+          roomId: null,
+          remoteStream: null 
+        }));
+        cleanupWebRTC();
       });
 
       socket.on('error', (error) => {
-        toast({
-          title: "Connection Error",
-          description: error.message,
-          variant: "destructive",
-        });
+        console.error('Socket error:', error);
+        setState(prev => ({ ...prev, error: error.message }));
       });
 
       socketRef.current = socket;
     } catch (error) {
       console.error('Error initializing socket:', error);
-      toast({
-        title: "Connection Error",
-        description: "Failed to connect to chat server.",
-        variant: "destructive",
-      });
+      setState(prev => ({ ...prev, error: 'Failed to initialize connection' }));
     }
-  }, [user, currentRoom, toast]);
+  }, []);
 
-  // Join queue for matching
-  const joinQueue = async (chatType: 'video' | 'text' | 'both' = 'both') => {
-    if (!user || !socketRef.current) return;
+  // Join queue
+  const joinQueue = useCallback(async (chatType: 'video' | 'text' = 'video') => {
+    if (!socketRef.current?.connected) {
+      await initializeSocket();
+    }
 
-    setIsConnecting(true);
-    setIsInQueue(true);
-
-    try {
+    if (socketRef.current) {
       socketRef.current.emit('join-queue', { chatType });
-    } catch (error) {
-      console.error('Error joining queue:', error);
-      toast({
-        title: "Connection Error",
-        description: "Failed to join the chat queue. Please try again.",
-        variant: "destructive",
-      });
-      setIsConnecting(false);
-      setIsInQueue(false);
+      setState(prev => ({ ...prev, isInQueue: true, error: null }));
     }
-  };
+  }, [initializeSocket]);
 
-  // Send text message
-  const sendMessage = async (content: string) => {
-    if (!currentRoom || !user || !content.trim() || !socketRef.current) return;
+  // Send message
+  const sendMessage = useCallback((message: string, messageType: 'text' | 'image' = 'text') => {
+    if (socketRef.current && state.roomId) {
+      socketRef.current.emit('send-message', {
+        roomId: state.roomId,
+        message,
+        messageType
+      });
+    }
+  }, [state.roomId]);
+
+  // Leave room
+  const leaveRoom = useCallback(() => {
+    if (socketRef.current && state.roomId) {
+      socketRef.current.emit('leave-room', { roomId: state.roomId });
+    }
+    setState(prev => ({ 
+      ...prev, 
+      isInRoom: false, 
+      isInQueue: false, 
+      roomId: null,
+      messages: [],
+      remoteStream: null 
+    }));
+    cleanupWebRTC();
+  }, [state.roomId]);
+
+  // Initialize WebRTC
+  const initializeWebRTC = useCallback(async () => {
+    try {
+      const configuration = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      };
+
+      peerConnectionRef.current = new RTCPeerConnection(configuration);
+
+      // Get local media stream
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+
+      localStreamRef.current = stream;
+      setState(prev => ({ ...prev, localStream: stream }));
+
+      // Add local stream to peer connection
+      stream.getTracks().forEach(track => {
+        if (peerConnectionRef.current) {
+          peerConnectionRef.current.addTrack(track, stream);
+        }
+      });
+
+      // Handle incoming streams
+      peerConnectionRef.current.ontrack = (event) => {
+        console.log('Received remote stream');
+        setState(prev => ({ ...prev, remoteStream: event.streams[0] }));
+      };
+
+      // Handle ICE candidates
+      peerConnectionRef.current.onicecandidate = (event) => {
+        if (event.candidate && socketRef.current) {
+          socketRef.current.emit('webrtc-signal', {
+            roomId: state.roomId,
+            signal: { type: 'ice-candidate', candidate: event.candidate },
+            targetUserId: null
+          });
+        }
+      };
+
+      // Create and send offer
+      const offer = await peerConnectionRef.current.createOffer();
+      await peerConnectionRef.current.setLocalDescription(offer);
+
+      if (socketRef.current) {
+        socketRef.current.emit('webrtc-signal', {
+          roomId: state.roomId,
+          signal: { type: 'offer', sdp: offer },
+          targetUserId: null
+        });
+      }
+    } catch (error) {
+      console.error('Error initializing WebRTC:', error);
+      setState(prev => ({ ...prev, error: 'Failed to access camera/microphone' }));
+    }
+  }, [state.roomId]);
+
+  // Handle WebRTC signaling
+  const handleWebRTCSignal = useCallback(async (data: any) => {
+    if (!peerConnectionRef.current) return;
 
     try {
-      socketRef.current.emit('send-message', {
-        roomId: currentRoom.id,
-        content: content.trim()
-      });
+      const { signal } = data;
+
+      if (signal.type === 'offer') {
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        const answer = await peerConnectionRef.current.createAnswer();
+        await peerConnectionRef.current.setLocalDescription(answer);
+
+        if (socketRef.current) {
+          socketRef.current.emit('webrtc-signal', {
+            roomId: state.roomId,
+            signal: { type: 'answer', sdp: answer },
+            targetUserId: null
+          });
+        }
+      } else if (signal.type === 'answer') {
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      } else if (signal.type === 'ice-candidate') {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
+      }
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "Message Error",
-        description: "Failed to send message.",
-        variant: "destructive",
-      });
+      console.error('Error handling WebRTC signal:', error);
     }
-  };
+  }, [state.roomId]);
 
   // Toggle video
-  const toggleVideo = () => {
+  const toggleVideo = useCallback(() => {
     if (localStreamRef.current) {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
+        setState(prev => ({ ...prev, isVideoEnabled: videoTrack.enabled }));
       }
     }
-  };
+  }, []);
 
   // Toggle audio
-  const toggleAudio = () => {
+  const toggleAudio = useCallback(() => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
-        setIsAudioEnabled(audioTrack.enabled);
+        setState(prev => ({ ...prev, isAudioEnabled: audioTrack.enabled }));
       }
     }
-  };
+  }, []);
 
-  // Leave current room
-  const leaveRoom = async () => {
-    if (!user) return;
-
+  // Toggle screen sharing
+  const toggleScreenSharing = useCallback(async () => {
     try {
-      if (socketRef.current && currentRoom) {
-        socketRef.current.emit('leave-room', { roomId: currentRoom.id });
+      if (!state.isScreenSharing) {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false
+        });
+
+        screenStreamRef.current = screenStream;
+        const videoTrack = screenStream.getVideoTracks()[0];
+
+        if (peerConnectionRef.current) {
+          const sender = peerConnectionRef.current.getSenders().find(s => 
+            s.track?.kind === 'video'
+          );
+          if (sender) {
+            sender.replaceTrack(videoTrack);
+          }
+        }
+
+        setState(prev => ({ ...prev, isScreenSharing: true }));
+      } else {
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach(track => track.stop());
+          screenStreamRef.current = null;
+        }
+
+        if (localStreamRef.current && peerConnectionRef.current) {
+          const videoTrack = localStreamRef.current.getVideoTracks()[0];
+          const sender = peerConnectionRef.current.getSenders().find(s => 
+            s.track?.kind === 'video'
+          );
+          if (sender && videoTrack) {
+            sender.replaceTrack(videoTrack);
+          }
+        }
+
+        setState(prev => ({ ...prev, isScreenSharing: false }));
       }
-
-      // Clean up WebRTC
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-      }
-
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
-      }
-
-      setCurrentRoom(null);
-      setMessages([]);
-      setParticipants([]);
-      setIsInQueue(false);
-      setIsConnecting(false);
-
     } catch (error) {
-      console.error('Error leaving room:', error);
+      console.error('Error toggling screen sharing:', error);
     }
-  };
+  }, [state.isScreenSharing]);
 
-  // Find next stranger
-  const findNext = async () => {
-    await leaveRoom();
-    await joinQueue();
-  };
+  // Cleanup WebRTC
+  const cleanupWebRTC = useCallback(() => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
 
-  // Initialize socket connection
-  useEffect(() => {
-    initializeSocket();
-  }, [initializeSocket]);
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
+    }
+
+    setState(prev => ({ 
+      ...prev, 
+      localStream: null, 
+      remoteStream: null,
+      isScreenSharing: false 
+    }));
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -344,30 +357,17 @@ export const useChatRoom = () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-      }
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-      }
+      cleanupWebRTC();
     };
-  }, []);
+  }, [cleanupWebRTC]);
 
   return {
-    currentRoom,
-    messages,
-    participants,
-    isInQueue,
-    isConnecting,
-    isVideoEnabled,
-    isAudioEnabled,
-    localVideoRef,
-    remoteVideoRef,
+    ...state,
     joinQueue,
     sendMessage,
     leaveRoom,
-    findNext,
     toggleVideo,
-    toggleAudio
+    toggleAudio,
+    toggleScreenSharing
   };
 };
