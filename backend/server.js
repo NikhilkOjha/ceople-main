@@ -16,11 +16,15 @@ const corsOptions = {
     'https://ceople-main.vercel.app',
     'http://localhost:8080',
     'http://localhost:3000',
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'https://ceople-main.vercel.app/',
+    'https://ceople-main.vercel.app/*'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
@@ -32,13 +36,15 @@ const io = socketIo(server, {
       'https://ceople-main.vercel.app',
       'http://localhost:8080',
       'http://localhost:3000',
-      'http://localhost:5173'
+      'http://localhost:5173',
+      'https://ceople-main.vercel.app/',
+      'https://ceople-main.vercel.app/*'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
   },
-  transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'],
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -356,9 +362,24 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Supabase URL: ${supabaseUrl ? 'Configured' : 'Missing'}`);
-  console.log(`Supabase Key: ${supabaseServiceKey ? 'Configured' : 'Missing'}`);
-  console.log(`Socket.IO transports: websocket, polling`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Supabase URL: ${supabaseUrl ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`🔑 Supabase Key: ${supabaseServiceKey ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`📡 Socket.IO transports: polling, websocket`);
+  console.log(`🌐 CORS origins: ${corsOptions.origin.join(', ')}`);
+  console.log(`⏰ Server started at: ${new Date().toISOString()}`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('❌ Server error:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
 }); 
