@@ -150,7 +150,8 @@ export const useChatRoom = () => {
       const socket = io(process.env.REACT_APP_BACKEND_URL || 'https://ceople-main.onrender.com', {
         auth: {
           token: session.access_token
-        }
+        },
+        transports: ['polling']
       });
 
       socket.on('connect', () => {
