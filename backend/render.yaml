@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ceople-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://arluwakftvvbioprdsmw.supabase.co
+      - key: FRONTEND_URL
+        value: https://ceople-main.vercel.app
+      - key: SUPABASE_SERVICE_KEY
+        sync: false 

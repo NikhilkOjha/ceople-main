@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -41,7 +42,7 @@ export const useChatRoom = () => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Initialize WebRTC
   const initializeWebRTC = async () => {
@@ -114,14 +115,11 @@ export const useChatRoom = () => {
 
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
-        if (event.candidate && currentRoom && signalingChannelRef.current) {
-          signalingChannelRef.current.send({
-            type: 'broadcast',
-            event: 'ice_candidate',
-            payload: { 
-              candidate: event.candidate,
-              from: user?.id 
-            }
+        if (event.candidate && currentRoom && socketRef.current) {
+          socketRef.current.emit('webrtc-signal', {
+            roomId: currentRoom.id,
+            signal: { type: 'ice-candidate', candidate: event.candidate },
+            targetUserId: null // Broadcast to all in room
           });
         }
       };
@@ -137,110 +135,113 @@ export const useChatRoom = () => {
     }
   };
 
-  // Setup signaling channel
-  const setupSignaling = () => {
-    if (!currentRoom || !user) return;
+  // Initialize Socket.IO connection
+  const initializeSocket = useCallback(async () => {
+    if (!user) return;
 
-    const channel = supabase.channel(`room_${currentRoom.id}`);
-    
-    // Handle offers
-    channel.on('broadcast', { event: 'offer' }, async (payload) => {
-      if (payload.payload.from !== user?.id && peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload.payload.offer));
-          const answer = await peerConnectionRef.current.createAnswer();
-          await peerConnectionRef.current.setLocalDescription(answer);
-          
-          channel.send({
-            type: 'broadcast',
-            event: 'answer',
-            payload: { 
-              answer,
-              from: user?.id 
-            }
-          });
-        } catch (error) {
-          console.error('Error handling offer:', error);
-        }
+    try {
+      // Get session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token');
       }
-    });
 
-    // Handle answers
-    channel.on('broadcast', { event: 'answer' }, async (payload) => {
-      if (payload.payload.from !== user?.id && peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload.payload.answer));
-        } catch (error) {
-          console.error('Error handling answer:', error);
+      // Connect to backend
+      const socket = io(process.env.REACT_APP_BACKEND_URL || 'https://ceople-backend.onrender.com', {
+        auth: {
+          token: session.access_token
         }
-      }
-    });
+      });
 
-    // Handle ICE candidates
-    channel.on('broadcast', { event: 'ice_candidate' }, async (payload) => {
-      if (payload.payload.from !== user?.id && peerConnectionRef.current) {
+      socket.on('connect', () => {
+        console.log('Connected to backend');
+      });
+
+      socket.on('match-found', async (data) => {
+        const { roomId } = data;
+        setCurrentRoom({ id: roomId, status: 'active', created_at: new Date().toISOString() });
+        setIsInQueue(false);
+        setIsConnecting(false);
+
+        // Initialize WebRTC for video chat
+        await initializeWebRTC();
+
+        toast({
+          title: "Match Found!",
+          description: "You've been connected with a stranger.",
+        });
+      });
+
+      socket.on('waiting-for-match', () => {
+        setIsInQueue(true);
+        setIsConnecting(false);
+      });
+
+      socket.on('new-message', (message: Message) => {
+        setMessages(prev => [...prev, message]);
+      });
+
+      socket.on('webrtc-signal', async (data) => {
+        const { signal, fromUserId } = data;
+        
+        if (fromUserId === user?.id || !peerConnectionRef.current) return;
+
         try {
-          await peerConnectionRef.current.addIceCandidate(payload.payload.candidate);
+          if (signal.type === 'offer') {
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+            const answer = await peerConnectionRef.current.createAnswer();
+            await peerConnectionRef.current.setLocalDescription(answer);
+            
+            socket.emit('webrtc-signal', {
+              roomId: currentRoom?.id,
+              signal: answer,
+              targetUserId: fromUserId
+            });
+          } else if (signal.type === 'answer') {
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+          } else if (signal.type === 'ice-candidate') {
+            await peerConnectionRef.current.addIceCandidate(signal.candidate);
+          }
         } catch (error) {
-          console.error('Error adding ICE candidate:', error);
+          console.error('Error handling WebRTC signal:', error);
         }
-      }
-    });
+      });
 
-    // Handle user joined
-    channel.on('broadcast', { event: 'user_joined' }, async (payload) => {
-      if (payload.payload.userId !== user?.id && peerConnectionRef.current) {
-        // Create and send offer to the new user
-        try {
-          const offer = await peerConnectionRef.current.createOffer();
-          await peerConnectionRef.current.setLocalDescription(offer);
-          
-          channel.send({
-            type: 'broadcast',
-            event: 'offer',
-            payload: { 
-              offer,
-              from: user?.id 
-            }
-          });
-        } catch (error) {
-          console.error('Error creating offer:', error);
+      socket.on('room-left', (data) => {
+        const { roomId } = data;
+        if (currentRoom?.id === roomId) {
+          leaveRoom();
         }
-      }
-    });
+      });
 
-    channel.subscribe();
-    signalingChannelRef.current = channel;
-  };
+      socket.on('error', (error) => {
+        toast({
+          title: "Connection Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      });
+
+      socketRef.current = socket;
+    } catch (error) {
+      console.error('Error initializing socket:', error);
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to chat server.",
+        variant: "destructive",
+      });
+    }
+  }, [user, currentRoom, toast]);
 
   // Join queue for matching
   const joinQueue = async (chatType: 'video' | 'text' | 'both' = 'both') => {
-    if (!user) return;
+    if (!user || !socketRef.current) return;
 
     setIsConnecting(true);
     setIsInQueue(true);
 
     try {
-      // First, remove any existing queue entry for this user
-      await supabase
-        .from('user_queue')
-        .delete()
-        .eq('user_id', user.id);
-
-      // Add user to queue
-      const { error: queueError } = await supabase
-        .from('user_queue')
-        .insert({
-          user_id: user.id,
-          chat_type: chatType,
-          interests: [] // TODO: Add interest selection
-        });
-
-      if (queueError) throw queueError;
-
-      // Try to find an existing waiting room or create a new one
-      await findOrCreateRoom(chatType);
-
+      socketRef.current.emit('join-queue', { chatType });
     } catch (error) {
       console.error('Error joining queue:', error);
       toast({
@@ -253,121 +254,15 @@ export const useChatRoom = () => {
     }
   };
 
-  // Find existing waiting room or create new one
-  const findOrCreateRoom = async (chatType: 'video' | 'text' | 'both' = 'both') => {
-    if (!user) return;
-
-    try {
-      // Look for waiting rooms
-      const { data: waitingRooms } = await supabase
-        .from('chat_rooms')
-        .select(`
-          *,
-          chat_participants(*)
-        `)
-        .eq('status', 'waiting')
-        .limit(1);
-
-      let room: ChatRoom;
-
-      if (waitingRooms && waitingRooms.length > 0) {
-        // Join existing waiting room
-        room = waitingRooms[0] as ChatRoom;
-        
-        // Add current user as participant
-        const { error: participantError } = await supabase
-          .from('chat_participants')
-          .insert({
-            room_id: room.id,
-            user_id: user.id
-          });
-
-        if (participantError) throw participantError;
-
-        // Update room status to active if we now have 2 participants
-        if ((waitingRooms[0] as { chat_participants: unknown[] }).chat_participants.length >= 1) {
-          const { error: updateError } = await supabase
-            .from('chat_rooms')
-            .update({ status: 'active' })
-            .eq('id', room.id);
-
-          if (updateError) throw updateError;
-        }
-      } else {
-        // Create new room
-        const { data: newRoom, error: roomError } = await supabase
-          .from('chat_rooms')
-          .insert({ status: 'waiting' })
-          .select()
-          .single();
-
-        if (roomError) throw roomError;
-        room = newRoom as ChatRoom;
-
-        // Add current user as participant
-        const { error: participantError } = await supabase
-          .from('chat_participants')
-          .insert({
-            room_id: room.id,
-            user_id: user.id
-          });
-
-        if (participantError) throw participantError;
-      }
-
-      setCurrentRoom(room);
-      
-      // Remove user from queue
-      await supabase
-        .from('user_queue')
-        .delete()
-        .eq('user_id', user.id);
-
-      setIsInQueue(false);
-      setIsConnecting(false);
-
-      // Initialize WebRTC for video chat
-      if (chatType === 'video' || chatType === 'both') {
-        await initializeWebRTC();
-      }
-
-      // Setup signaling
-      setupSignaling();
-
-      // Notify other participants
-      if (signalingChannelRef.current) {
-        signalingChannelRef.current.send({
-          type: 'broadcast',
-          event: 'user_joined',
-          payload: { userId: user.id }
-        });
-      }
-
-    } catch (error) {
-      console.error('Error finding/creating room:', error);
-      toast({
-        title: "Room Error",
-        description: "Failed to create or join a chat room.",
-        variant: "destructive",
-      });
-    }
-  };
-
   // Send text message
   const sendMessage = async (content: string) => {
-    if (!currentRoom || !user || !content.trim()) return;
+    if (!currentRoom || !user || !content.trim() || !socketRef.current) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          room_id: currentRoom.id,
-          user_id: user.id,
-          content: content.trim(),
-          message_type: 'text'
-        });
-
-      if (error) throw error;
+      socketRef.current.emit('send-message', {
+        roomId: currentRoom.id,
+        content: content.trim()
+      });
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -405,31 +300,8 @@ export const useChatRoom = () => {
     if (!user) return;
 
     try {
-      // Remove user from queue if they're in one
-      await supabase
-        .from('user_queue')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (currentRoom) {
-        // Update participant status
-        await supabase
-          .from('chat_participants')
-          .update({ 
-            is_active: false,
-            left_at: new Date().toISOString()
-          })
-          .eq('room_id', currentRoom.id)
-          .eq('user_id', user.id);
-
-        // Update room status to ended
-        await supabase
-          .from('chat_rooms')
-          .update({ 
-            status: 'ended',
-            ended_at: new Date().toISOString()
-          })
-          .eq('id', currentRoom.id);
+      if (socketRef.current && currentRoom) {
+        socketRef.current.emit('leave-room', { roomId: currentRoom.id });
       }
 
       // Clean up WebRTC
@@ -441,11 +313,6 @@ export const useChatRoom = () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
         localStreamRef.current = null;
-      }
-
-      if (signalingChannelRef.current) {
-        supabase.removeChannel(signalingChannelRef.current);
-        signalingChannelRef.current = null;
       }
 
       setCurrentRoom(null);
@@ -465,80 +332,25 @@ export const useChatRoom = () => {
     await joinQueue();
   };
 
-  // Load messages
-  const loadMessages = useCallback(async () => {
-    if (!currentRoom) return;
-
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('room_id', currentRoom.id)
-      .order('created_at', { ascending: true });
-
-    if (data) setMessages(data as Message[]);
-  }, [currentRoom]);
-
-  // Load participants
-  const loadParticipants = useCallback(async () => {
-    if (!currentRoom) return;
-
-    const { data } = await supabase
-      .from('chat_participants')
-      .select('*')
-      .eq('room_id', currentRoom.id)
-      .eq('is_active', true);
-
-    if (data) setParticipants(data);
-  }, [currentRoom]);
-
-  // Set up real-time subscriptions
+  // Initialize socket connection
   useEffect(() => {
-    if (!currentRoom) return;
+    initializeSocket();
+  }, [initializeSocket]);
 
-    // Subscribe to messages
-    const messagesSubscription = supabase
-      .channel(`messages_${currentRoom.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `room_id=eq.${currentRoom.id}`
-        },
-        (payload) => {
-          setMessages(prev => [...prev, payload.new as Message]);
-        }
-      )
-      .subscribe();
-
-    // Subscribe to participants
-    const participantsSubscription = supabase
-      .channel(`participants_${currentRoom.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chat_participants',
-          filter: `room_id=eq.${currentRoom.id}`
-        },
-        (payload) => {
-          // Reload participants
-          loadParticipants();
-        }
-      )
-      .subscribe();
-
-    // Load initial data
-    loadMessages();
-    loadParticipants();
-
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      supabase.removeChannel(messagesSubscription);
-      supabase.removeChannel(participantsSubscription);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [currentRoom, loadMessages, loadParticipants]);
+  }, []);
 
   return {
     currentRoom,
