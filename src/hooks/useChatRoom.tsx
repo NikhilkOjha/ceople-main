@@ -147,7 +147,7 @@ export const useChatRoom = () => {
       }
 
       // Connect to backend
-      const socket = io(process.env.REACT_APP_BACKEND_URL || 'https://ceople-backend.onrender.com', {
+      const socket = io(process.env.REACT_APP_BACKEND_URL || 'https://ceople-main.onrender.com', {
         auth: {
           token: session.access_token
         }
