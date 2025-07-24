@@ -15,8 +15,11 @@ const io = socketIo(server, {
     origin: ["https://ceople-main.vercel.app", "http://localhost:8080", "http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"]
-  }
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    transports: ['polling', 'websocket']
+  },
+  allowEIO3: true,
+  transports: ['polling', 'websocket']
 });
 
 // Initialize Supabase
@@ -29,12 +32,31 @@ const supabase = createClient(
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
+// CORS middleware
 app.use(cors({
   origin: ["https://ceople-main.vercel.app", "http://localhost:8080", "http://localhost:3000"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
+
+// Preflight handler for Socket.IO
+app.options('/socket.io/*', cors({
+  origin: ["https://ceople-main.vercel.app", "http://localhost:8080", "http://localhost:3000"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+}));
+
+// Add CORS headers for all Socket.IO routes
+app.use('/socket.io/*', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://ceople-main.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -74,6 +96,8 @@ io.use(authenticateUser);
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.user.id}`);
+  console.log(`Socket transport: ${socket.conn.transport.name}`);
+  console.log(`Socket headers:`, socket.handshake.headers);
 
   // Join chat queue
   socket.on('join-queue', async (data) => {
