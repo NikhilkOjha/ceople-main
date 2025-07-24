@@ -102,7 +102,6 @@ const ChatInterface = () => {
                   onClick={() => joinQueue('video')} 
                   className="w-full"
                   size="lg"
-                  disabled={!isConnected}
                 >
                   <Video className="mr-2 h-4 w-4" />
                   Start Video Chat
@@ -112,10 +111,18 @@ const ChatInterface = () => {
                   variant="outline"
                   className="w-full"
                   size="lg"
-                  disabled={!isConnected}
                 >
                   <Send className="mr-2 h-4 w-4" />
                   Start Text Chat
+                </Button>
+                <Button 
+                  onClick={() => joinQueue('video')} 
+                  variant="secondary"
+                  className="w-full"
+                  size="lg"
+                >
+                  <Phone className="mr-2 h-4 w-4" />
+                  Start Both
                 </Button>
               </div>
             )}
@@ -127,141 +134,176 @@ const ChatInterface = () => {
 
   // Video chat interface
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-card">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-2">
-            <Badge variant="secondary">Room: {roomId?.slice(0, 8)}...</Badge>
-            <Badge variant={isConnected ? "default" : "destructive"}>
-              {isConnected ? "Connected" : "Disconnected"}
-            </Badge>
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-2rem)]">
+        
+        {/* Video Area */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant={isInRoom ? 'default' : 'secondary'}>
+                {isInRoom ? 'Connected' : 'Waiting'}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                Room: {roomId?.slice(0, 8)}...
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={leaveRoom}>
+                <SkipForward className="h-4 w-4 mr-1" />
+                Next
+              </Button>
+              <Button variant="destructive" size="sm" onClick={leaveRoom}>
+                <X className="h-4 w-4 mr-1" />
+                Leave
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
+
+          {/* Video Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[60vh]">
+            {/* Local Video */}
+            <Card className="relative overflow-hidden">
+              <CardContent className="p-0 h-full">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover bg-muted"
+                />
+                <div className="absolute bottom-4 left-4">
+                  <Badge variant="secondary">You</Badge>
+                </div>
+                {!isVideoEnabled && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <VideoOff className="h-12 w-12 text-white" />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Remote Video */}
+            <Card className="relative overflow-hidden">
+              <CardContent className="p-0 h-full">
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover bg-muted"
+                />
+                <div className="absolute bottom-4 left-4">
+                  <Badge variant="secondary">Stranger</Badge>
+                </div>
+                {!remoteStream && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                      <p className="text-muted-foreground">Waiting for stranger...</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Video Controls */}
+          <div className="flex justify-center gap-4">
             <Button
-              variant="outline"
-              size="sm"
+              variant={isVideoEnabled ? "default" : "destructive"}
+              size="lg"
               onClick={toggleVideo}
-              className={!isVideoEnabled ? "bg-destructive/10 text-destructive" : ""}
+              className="rounded-full w-12 h-12 p-0"
             >
-              {isVideoEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+              {isVideoEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant={isAudioEnabled ? "default" : "destructive"}
+              size="lg"
               onClick={toggleAudio}
-              className={!isAudioEnabled ? "bg-destructive/10 text-destructive" : ""}
+              className="rounded-full w-12 h-12 p-0"
             >
-              {isAudioEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+              {isAudioEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant={isScreenSharing ? "default" : "outline"}
+              size="lg"
               onClick={toggleScreenSharing}
-              className={isScreenSharing ? "bg-primary/10 text-primary" : ""}
+              className="rounded-full w-12 h-12 p-0"
             >
-              <Monitor className="h-4 w-4" />
+              <Monitor className="h-5 w-5" />
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="lg"
               onClick={leaveRoom}
+              className="rounded-full w-12 h-12 p-0"
             >
-              <X className="h-4 w-4" />
+              <PhoneOff className="h-5 w-5" />
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Main content */}
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* Video area */}
-        <div className="flex-1 p-4">
-          <div className="grid grid-cols-2 gap-4 h-full">
-            {/* Remote video */}
-            <div className="relative bg-black rounded-lg overflow-hidden">
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-cover"
-              />
-              {!remoteStream && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <div className="text-center text-white">
-                    <VideoOff className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Waiting for stranger...</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Local video */}
-            <div className="relative bg-black rounded-lg overflow-hidden">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              {!localStream && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <div className="text-center text-white">
-                    <VideoOff className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Camera not available</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Chat area */}
-        <div className="w-80 border-l bg-card">
-          <div className="flex flex-col h-full">
-            {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${message.senderId === user?.id ? 'justify-end' : 'justify-start'}`}
-                  >
+        {/* Chat Area */}
+        <Card className="flex flex-col h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Chat</CardTitle>
+          </CardHeader>
+          <Separator />
+          
+          {/* Messages */}
+          <CardContent className="flex-1 p-0">
+            <ScrollArea className="h-[50vh] p-4">
+              <div className="space-y-3">
+                {messages.length === 0 ? (
+                  <p className="text-center text-muted-foreground text-sm">
+                    No messages yet. Start the conversation!
+                  </p>
+                ) : (
+                  messages.map((message, index) => (
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg ${
-                        message.senderId === user?.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
+                      key={index}
+                      className={`flex ${
+                        message.senderId === user?.id ? 'justify-end' : 'justify-start'
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                      </p>
+                      <div
+                        className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                          message.senderId === user?.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        <p>{message.content}</p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {new Date(message.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
+          </CardContent>
 
-            {/* Message input */}
-            <div className="p-4 border-t">
-              <form onSubmit={handleSendMessage} className="flex space-x-2">
-                <Input
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1"
-                />
-                <Button type="submit" size="sm">
-                  <Send className="h-4 w-4" />
-                </Button>
-              </form>
-            </div>
-          </div>
-        </div>
+          <Separator />
+
+          {/* Message Input */}
+          <CardContent className="p-4">
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <Input
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                placeholder="Type a message..."
+                className="flex-1"
+              />
+              <Button type="submit" size="sm" disabled={!messageInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
