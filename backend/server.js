@@ -12,8 +12,10 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "https://ceople-main.vercel.app",
-    methods: ["GET", "POST"]
+    origin: ["https://ceople-main.vercel.app", "http://localhost:8080", "http://localhost:3000"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   }
 });
 
@@ -24,10 +26,14 @@ const supabase = createClient(
 );
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://ceople-main.vercel.app",
-  credentials: true
+  origin: ["https://ceople-main.vercel.app", "http://localhost:8080", "http://localhost:3000"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 
 // Rate limiting
@@ -252,7 +258,21 @@ async function findMatch(socket, chatType) {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    frontendUrl: process.env.FRONTEND_URL || 'https://ceople-main.vercel.app'
+  });
+});
+
+// Socket.IO health check
+app.get('/socket.io/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    socketIO: 'running',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // API endpoints
@@ -273,6 +293,8 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'https://ceople-main.vercel.app'}`);
+  console.log(`Supabase URL: ${process.env.SUPABASE_URL || 'Not set'}`);
 }); 
