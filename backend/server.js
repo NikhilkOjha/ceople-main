@@ -15,11 +15,12 @@ const io = socketIo(server, {
     origin: ["https://ceople-main.vercel.app", "http://localhost:8080", "http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    transports: ['polling', 'websocket']
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
   },
+  transports: ['polling'],
   allowEIO3: true,
-  transports: ['polling', 'websocket']
+  pingTimeout: 30000,
+  pingInterval: 10000
 });
 
 // Initialize Supabase
