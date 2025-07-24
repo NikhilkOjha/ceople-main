@@ -59,9 +59,12 @@ export const useChatRoom = () => {
         auth: {
           token: session.access_token
         },
-        transports: ['websocket', 'polling'], // Allow both WebSocket and polling
+        transports: ['polling', 'websocket'], // Try polling first, then upgrade to WebSocket
         timeout: 20000,
-        forceNew: true
+        forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
       });
 
       socket.on('connect', () => {
@@ -81,7 +84,12 @@ export const useChatRoom = () => {
 
       socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
-        setState(prev => ({ ...prev, error: 'Failed to connect to server' }));
+        console.error('Backend URL:', BACKEND_URL);
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name
+        });
+        setState(prev => ({ ...prev, error: `Failed to connect to server: ${error.message}` }));
       });
 
       socket.on('match-found', (data) => {
