@@ -76,18 +76,21 @@ const authenticateUser = async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
     if (!token) {
-      return next(new Error('Authentication error'));
+      console.error('Socket.IO auth error: No token provided', socket.handshake);
+      return next(new Error('Authentication error: No token'));
     }
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
-      return next(new Error('Authentication error'));
+      console.error('Socket.IO auth error: Invalid token', error, socket.handshake);
+      return next(new Error('Authentication error: Invalid token'));
     }
 
     socket.user = user;
     next();
   } catch (error) {
-    next(new Error('Authentication error'));
+    console.error('Socket.IO auth error: Exception', error, socket.handshake);
+    next(new Error('Authentication error: Exception'));
   }
 };
 
@@ -95,7 +98,13 @@ io.use(authenticateUser);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.user.id}`);
+  console.log(`User connected: ${socket.user?.id}`);
+  socket.on('error', (err) => {
+    console.error('Socket.IO connection error:', err);
+  });
+  socket.conn.on('close', (reason) => {
+    console.warn('Socket.IO connection closed:', reason);
+  });
   console.log(`Socket transport: ${socket.conn.transport.name}`);
   console.log(`Socket headers:`, socket.handshake.headers);
 
