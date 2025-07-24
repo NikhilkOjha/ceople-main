@@ -111,22 +111,29 @@ io.on('connection', (socket) => {
   // Join chat queue
   socket.on('join-queue', async (data) => {
     try {
+      console.log('join-queue event received', data, 'user:', socket.user?.id);
       const { chatType = 'both' } = data;
       
       // Remove user from any existing queue
-      await supabase
+      const { error: delError } = await supabase
         .from('user_queue')
         .delete()
         .eq('user_id', socket.user.id);
+      if (delError) {
+        console.error('Supabase queue delete error:', delError);
+      }
 
       // Add user to queue
-      await supabase
+      const { error: queueError } = await supabase
         .from('user_queue')
         .insert({
           user_id: socket.user.id,
           chat_type: chatType,
           interests: []
         });
+      if (queueError) {
+        console.error('Supabase queue insert error:', queueError);
+      }
 
       // Try to find a match
       await findMatch(socket, chatType);
