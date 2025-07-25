@@ -314,6 +314,9 @@ export const useChatRoom = () => {
         targetUserId: null
       });
       console.log('✅ Offer sent successfully');
+      
+      // Test: Log the offer SDP to see if it's valid
+      console.log('📋 Offer SDP preview:', offer.sdp.substring(0, 200) + '...');
     } catch (error) {
       console.error('❌ Error creating offer:', error);
     }
@@ -499,6 +502,7 @@ export const useChatRoom = () => {
     leaveRoom,
     toggleVideo,
     toggleAudio,
-    toggleScreenSharing
+    toggleScreenSharing,
+    createOffer
   };
 };

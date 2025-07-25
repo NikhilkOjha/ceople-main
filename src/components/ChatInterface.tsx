@@ -28,7 +28,8 @@ const ChatInterface = () => {
     leaveRoom,
     toggleVideo,
     toggleAudio,
-    toggleScreenSharing
+    toggleScreenSharing,
+    createOffer
   } = useChatRoom();
 
   const [messageInput, setMessageInput] = useState('');
@@ -203,9 +204,22 @@ const ChatInterface = () => {
               </span>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={leaveRoom}>
+              <Button variant="outline" size="sm" onClick={() => {
+                leaveRoom();
+                setTimeout(() => joinQueue('video'), 100);
+              }}>
                 <SkipForward className="h-4 w-4 mr-1" />
                 Next
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  console.log('🔧 Manual WebRTC test triggered');
+                  createOffer();
+                }}
+              >
+                🔧 Test
               </Button>
               <Button variant="destructive" size="sm" onClick={leaveRoom}>
                 <X className="h-4 w-4 mr-1" />
