@@ -198,12 +198,38 @@ io.on('connection', (socket) => {
 
   // WebRTC signaling
   socket.on('webrtc-signal', (data) => {
-    const { roomId, signal, targetUserId } = data;
-    socket.to(roomId).emit('webrtc-signal', {
-      signal,
-      fromUserId: socket.userId,
-      targetUserId
-    });
+    try {
+      const { roomId, signal, targetUserId } = data;
+      console.log('📡 WebRTC signal received:', signal.type, 'from user:', socket.userId, 'to room:', roomId);
+      
+      // Broadcast to other users in the room
+      socket.to(roomId).emit('webrtc-signal', {
+        signal,
+        fromUserId: socket.userId,
+        targetUserId
+      });
+      
+      console.log('📡 WebRTC signal relayed to room:', roomId);
+    } catch (error) {
+      console.error('❌ Error handling WebRTC signal:', error);
+    }
+  });
+
+  // Test ping-pong for WebRTC
+  socket.on('webrtc-ping', (data) => {
+    try {
+      const { roomId } = data;
+      console.log('🏓 WebRTC ping from user:', socket.userId, 'to room:', roomId);
+      
+      socket.to(roomId).emit('webrtc-pong', {
+        fromUserId: socket.userId,
+        roomId
+      });
+      
+      console.log('🏓 WebRTC pong sent to room:', roomId);
+    } catch (error) {
+      console.error('❌ Error handling WebRTC ping:', error);
+    }
   });
 
   // Leave room event

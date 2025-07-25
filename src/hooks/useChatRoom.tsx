@@ -124,6 +124,10 @@ export const useChatRoom = () => {
         handleWebRTCSignal(data);
       });
 
+      socket.on('webrtc-pong', (data) => {
+        console.log('🏓 WebRTC pong received from user:', data.fromUserId);
+      });
+
       socket.on('user-left', (data) => {
         console.log('User left:', data);
         setState(prev => ({ 
@@ -317,6 +321,14 @@ export const useChatRoom = () => {
       
       // Test: Log the offer SDP to see if it's valid
       console.log('📋 Offer SDP preview:', offer.sdp.substring(0, 200) + '...');
+      
+      // Test: Send a ping to verify signaling is working
+      setTimeout(() => {
+        if (socketRef.current && state.roomId) {
+          console.log('🏓 Sending WebRTC ping test...');
+          socketRef.current.emit('webrtc-ping', { roomId: state.roomId });
+        }
+      }, 1000);
     } catch (error) {
       console.error('❌ Error creating offer:', error);
     }
