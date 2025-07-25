@@ -393,11 +393,17 @@ export const useChatRoom = () => {
 
         if (socketRef.current) {
           console.log('📤 Sending answer');
-          socketRef.current.emit('webrtc-signal', {
-            roomId: state.roomId,
-            signal: { type: 'answer', sdp: answer },
-            targetUserId: null
-          });
+          const currentRoomId = currentRoomIdRef.current;
+          if (currentRoomId) {
+            socketRef.current.emit('webrtc-signal', {
+              roomId: currentRoomId,
+              signal: { type: 'answer', sdp: answer },
+              targetUserId: null
+            });
+            console.log('✅ Answer sent to room:', currentRoomId);
+          } else {
+            console.error('❌ Cannot send answer - no room ID available');
+          }
         }
       } else if (signal.type === 'answer') {
         console.log('📥 Setting remote description (answer)');
