@@ -192,10 +192,19 @@ export const useChatRoom = () => {
 
       peerConnectionRef.current = new RTCPeerConnection(configuration);
 
-      // Get local media stream
+      // Get local media stream with mobile-friendly constraints
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        video: {
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          facingMode: 'user', // Use front camera on mobile
+          frameRate: { ideal: 30, min: 15 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
 
       localStreamRef.current = stream;
@@ -204,6 +213,7 @@ export const useChatRoom = () => {
       // Add local stream to peer connection
       stream.getTracks().forEach(track => {
         if (peerConnectionRef.current) {
+          console.log('📹 Adding track to peer connection:', track.kind);
           peerConnectionRef.current.addTrack(track, stream);
         }
       });
@@ -211,6 +221,7 @@ export const useChatRoom = () => {
       // Handle incoming streams
       peerConnectionRef.current.ontrack = (event) => {
         console.log('✅ Received remote stream:', event.streams[0]);
+        console.log('📹 Remote stream tracks:', event.streams[0].getTracks().map(t => t.kind));
         setState(prev => ({ ...prev, remoteStream: event.streams[0] }));
       };
 
@@ -233,6 +244,7 @@ export const useChatRoom = () => {
       // Handle ICE candidates
       peerConnectionRef.current.onicecandidate = (event) => {
         if (event.candidate && socketRef.current) {
+          console.log('🧊 Sending ICE candidate');
           socketRef.current.emit('webrtc-signal', {
             roomId: state.roomId,
             signal: { type: 'ice-candidate', candidate: event.candidate },
@@ -242,10 +254,12 @@ export const useChatRoom = () => {
       };
 
       // Create and send offer
+      console.log('📤 Creating offer...');
       const offer = await peerConnectionRef.current.createOffer();
       await peerConnectionRef.current.setLocalDescription(offer);
 
       if (socketRef.current) {
+        console.log('📤 Sending offer');
         socketRef.current.emit('webrtc-signal', {
           roomId: state.roomId,
           signal: { type: 'offer', sdp: offer },
@@ -253,8 +267,25 @@ export const useChatRoom = () => {
         });
       }
     } catch (error) {
-      console.error('Error initializing WebRTC:', error);
-      setState(prev => ({ ...prev, error: 'Failed to access camera/microphone' }));
+      console.error('❌ Error initializing WebRTC:', error);
+      
+      // Provide specific error messages for mobile
+      let errorMessage = 'Failed to access camera/microphone';
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = 'Camera/microphone permission denied. Please allow access in your browser settings.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = 'No camera or microphone found. Please check your device.';
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = 'Camera/microphone not supported in this browser.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = 'Camera/microphone is already in use by another application.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setState(prev => ({ ...prev, error: errorMessage }));
     }
   }, [state.roomId]);
 

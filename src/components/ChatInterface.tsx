@@ -44,13 +44,23 @@ const ChatInterface = () => {
   // Set video streams
   useEffect(() => {
     if (localVideoRef.current && localStream) {
+      console.log('📹 Setting local video stream');
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.onloadedmetadata = () => {
+        console.log('✅ Local video metadata loaded');
+        localVideoRef.current?.play().catch(e => console.error('Local video play error:', e));
+      };
     }
   }, [localStream]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
+      console.log('📹 Setting remote video stream');
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.onloadedmetadata = () => {
+        console.log('✅ Remote video metadata loaded');
+        remoteVideoRef.current?.play().catch(e => console.error('Remote video play error:', e));
+      };
     }
   }, [remoteStream]);
 
@@ -170,7 +180,9 @@ const ChatInterface = () => {
                   autoPlay
                   muted
                   playsInline
+                  controls={false}
                   className="w-full h-full object-cover bg-muted"
+                  style={{ transform: 'scaleX(-1)' }} // Mirror local video
                 />
                 <div className="absolute bottom-4 left-4">
                   <Badge variant="secondary">You</Badge>
@@ -190,6 +202,7 @@ const ChatInterface = () => {
                   ref={remoteVideoRef}
                   autoPlay
                   playsInline
+                  controls={false}
                   className="w-full h-full object-cover bg-muted"
                 />
                 <div className="absolute bottom-4 left-4">
@@ -200,6 +213,15 @@ const ChatInterface = () => {
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
                       <p className="text-muted-foreground">Waiting for stranger...</p>
+                      <p className="text-xs text-muted-foreground mt-1">Connecting...</p>
+                    </div>
+                  </div>
+                )}
+                {remoteStream && remoteStream.getVideoTracks().length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <div className="text-center">
+                      <VideoOff className="h-12 w-12 text-white mx-auto mb-2" />
+                      <p className="text-white">Stranger's camera is off</p>
                     </div>
                   </div>
                 )}
