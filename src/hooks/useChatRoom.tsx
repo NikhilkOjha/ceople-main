@@ -94,6 +94,8 @@ export const useChatRoom = () => {
 
       socket.on('match-found', (data) => {
         console.log('🎯 Match found:', data);
+        
+        // Set the room ID first
         setState(prev => ({ 
           ...prev, 
           isInQueue: false, 
@@ -101,16 +103,18 @@ export const useChatRoom = () => {
           roomId: data.roomId 
         }));
         
-        // Both users initialize WebRTC and create offers
-        initializeWebRTC().then(() => {
-          console.log('✅ WebRTC initialized, creating offer...');
-          // Both users create offers - the first one wins
-          setTimeout(() => {
-            createOffer();
-          }, 500);
-        }).catch(error => {
-          console.error('❌ Error initializing WebRTC:', error);
-        });
+        // Wait for state to update, then initialize WebRTC
+        setTimeout(() => {
+          initializeWebRTC().then(() => {
+            console.log('✅ WebRTC initialized, creating offer...');
+            // Both users create offers - the first one wins
+            setTimeout(() => {
+              createOffer();
+            }, 500);
+          }).catch(error => {
+            console.error('❌ Error initializing WebRTC:', error);
+          });
+        }, 100);
       });
 
       socket.on('new-message', (message) => {
@@ -259,13 +263,15 @@ export const useChatRoom = () => {
 
       // Handle ICE candidates
       peerConnectionRef.current.onicecandidate = (event) => {
-        if (event.candidate && socketRef.current) {
-          console.log('🧊 Sending ICE candidate');
+        if (event.candidate && socketRef.current && state.roomId) {
+          console.log('🧊 Sending ICE candidate to room:', state.roomId);
           socketRef.current.emit('webrtc-signal', {
             roomId: state.roomId,
             signal: { type: 'ice-candidate', candidate: event.candidate },
             targetUserId: null
           });
+        } else {
+          console.log('⚠️ Cannot send ICE candidate - missing roomId or socket');
         }
       };
 
@@ -305,13 +311,18 @@ export const useChatRoom = () => {
       return;
     }
 
+    if (!state.roomId) {
+      console.error('❌ No room ID available for offer');
+      return;
+    }
+
     try {
-      console.log('📤 Creating offer...');
+      console.log('📤 Creating offer for room:', state.roomId);
       const offer = await peerConnectionRef.current.createOffer();
       console.log('📤 Offer created, setting local description...');
       await peerConnectionRef.current.setLocalDescription(offer);
 
-      console.log('📤 Sending offer via socket...');
+      console.log('📤 Sending offer via socket to room:', state.roomId);
       socketRef.current.emit('webrtc-signal', {
         roomId: state.roomId,
         signal: { type: 'offer', sdp: offer },
@@ -325,7 +336,7 @@ export const useChatRoom = () => {
       // Test: Send a ping to verify signaling is working
       setTimeout(() => {
         if (socketRef.current && state.roomId) {
-          console.log('🏓 Sending WebRTC ping test...');
+          console.log('🏓 Sending WebRTC ping test to room:', state.roomId);
           socketRef.current.emit('webrtc-ping', { roomId: state.roomId });
         }
       }, 1000);
