@@ -46,6 +46,7 @@ export const useChatRoom = () => {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const currentRoomIdRef = useRef<string | null>(null);
 
   // Initialize Socket.IO connection
   const initializeSocket = useCallback(async () => {
@@ -95,7 +96,8 @@ export const useChatRoom = () => {
       socket.on('match-found', (data) => {
         console.log('🎯 Match found:', data);
         
-        // Set the room ID first
+        // Set the room ID in both state and ref
+        currentRoomIdRef.current = data.roomId;
         setState(prev => ({ 
           ...prev, 
           isInQueue: false, 
@@ -183,6 +185,10 @@ export const useChatRoom = () => {
     if (socketRef.current && state.roomId) {
       socketRef.current.emit('leave-room', { roomId: state.roomId });
     }
+    
+    // Clear room ID ref
+    currentRoomIdRef.current = null;
+    
     setState(prev => ({ 
       ...prev, 
       isInRoom: false, 
@@ -263,15 +269,21 @@ export const useChatRoom = () => {
 
       // Handle ICE candidates
       peerConnectionRef.current.onicecandidate = (event) => {
-        if (event.candidate && socketRef.current && state.roomId) {
-          console.log('🧊 Sending ICE candidate to room:', state.roomId);
-          socketRef.current.emit('webrtc-signal', {
-            roomId: state.roomId,
-            signal: { type: 'ice-candidate', candidate: event.candidate },
-            targetUserId: null
-          });
+        if (event.candidate && socketRef.current) {
+          // Use the roomId from ref (immediately available)
+          const currentRoomId = currentRoomIdRef.current;
+          if (currentRoomId) {
+            console.log('🧊 Sending ICE candidate to room:', currentRoomId);
+            socketRef.current.emit('webrtc-signal', {
+              roomId: currentRoomId,
+              signal: { type: 'ice-candidate', candidate: event.candidate },
+              targetUserId: null
+            });
+          } else {
+            console.log('⚠️ Cannot send ICE candidate - roomId not set yet');
+          }
         } else {
-          console.log('⚠️ Cannot send ICE candidate - missing roomId or socket');
+          console.log('⚠️ Cannot send ICE candidate - missing candidate or socket');
         }
       };
 
