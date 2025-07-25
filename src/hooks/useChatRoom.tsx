@@ -109,7 +109,7 @@ export const useChatRoom = () => {
             console.log('✅ WebRTC initialized, creating offer...');
             // Both users create offers - the first one wins
             setTimeout(() => {
-              createOffer();
+              createOfferWithRoomId(data.roomId);
             }, 500);
           }).catch(error => {
             console.error('❌ Error initializing WebRTC:', error);
@@ -299,8 +299,8 @@ export const useChatRoom = () => {
     }
   }, [state.roomId]);
 
-  // Create and send offer
-  const createOffer = useCallback(async () => {
+  // Create and send offer with explicit room ID
+  const createOfferWithRoomId = useCallback(async (roomId: string) => {
     if (!peerConnectionRef.current) {
       console.error('❌ No peer connection available for offer');
       return;
@@ -311,20 +311,20 @@ export const useChatRoom = () => {
       return;
     }
 
-    if (!state.roomId) {
-      console.error('❌ No room ID available for offer');
+    if (!roomId) {
+      console.error('❌ No room ID provided for offer');
       return;
     }
 
     try {
-      console.log('📤 Creating offer for room:', state.roomId);
+      console.log('📤 Creating offer for room:', roomId);
       const offer = await peerConnectionRef.current.createOffer();
       console.log('📤 Offer created, setting local description...');
       await peerConnectionRef.current.setLocalDescription(offer);
 
-      console.log('📤 Sending offer via socket to room:', state.roomId);
+      console.log('📤 Sending offer via socket to room:', roomId);
       socketRef.current.emit('webrtc-signal', {
-        roomId: state.roomId,
+        roomId: roomId,
         signal: { type: 'offer', sdp: offer },
         targetUserId: null
       });
@@ -335,15 +335,24 @@ export const useChatRoom = () => {
       
       // Test: Send a ping to verify signaling is working
       setTimeout(() => {
-        if (socketRef.current && state.roomId) {
-          console.log('🏓 Sending WebRTC ping test to room:', state.roomId);
-          socketRef.current.emit('webrtc-ping', { roomId: state.roomId });
+        if (socketRef.current && roomId) {
+          console.log('🏓 Sending WebRTC ping test to room:', roomId);
+          socketRef.current.emit('webrtc-ping', { roomId: roomId });
         }
       }, 1000);
     } catch (error) {
       console.error('❌ Error creating offer:', error);
     }
-  }, [state.roomId]);
+  }, []);
+
+  // Create and send offer (legacy function)
+  const createOffer = useCallback(async () => {
+    if (!state.roomId) {
+      console.error('❌ No room ID available for offer');
+      return;
+    }
+    return createOfferWithRoomId(state.roomId);
+  }, [state.roomId, createOfferWithRoomId]);
 
   // Handle WebRTC signaling
   const handleWebRTCSignal = useCallback(async (data: any) => {
