@@ -7,6 +7,17 @@ const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 const app = express();
 const server = http.createServer(app);
 
@@ -107,8 +118,12 @@ io.use(async (socket, next) => {
 
 // Socket.IO connection handler
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.userId);
-  activeUsers.set(socket.userId, socket);
+  try {
+    console.log('User connected:', socket.userId);
+    activeUsers.set(socket.userId, socket);
+  } catch (error) {
+    console.error('❌ Error in socket connection:', error);
+  }
 
   // Join queue event
   socket.on('join-queue', async (data) => {
@@ -143,7 +158,7 @@ io.on('connection', (socket) => {
       await findMatch(socket.userId, chatType);
       
     } catch (error) {
-      console.error('Error in join-queue:', error);
+      console.error('❌ Error in join-queue:', error);
       socket.emit('error', { message: 'Failed to join queue' });
     }
   });
@@ -374,12 +389,4 @@ server.listen(PORT, '0.0.0.0', () => {
 // Handle server errors
 server.on('error', (error) => {
   console.error('❌ Server error:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
 }); 
