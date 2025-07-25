@@ -211,16 +211,7 @@ const ChatInterface = () => {
                 <SkipForward className="h-4 w-4 mr-1" />
                 Next
               </Button>
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={() => {
-                  console.log('🔧 Manual WebRTC test triggered');
-                  createOffer();
-                }}
-              >
-                🔧 Test
-              </Button>
+              
               <Button variant="destructive" size="sm" onClick={leaveRoom}>
                 <X className="h-4 w-4 mr-1" />
                 Leave

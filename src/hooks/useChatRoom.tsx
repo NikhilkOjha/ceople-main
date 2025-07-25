@@ -142,13 +142,28 @@ export const useChatRoom = () => {
 
       socket.on('user-left', (data) => {
         console.log('User left:', data);
+        
+        // Clean up WebRTC
+        cleanupWebRTC();
+        
+        // Go back to queue instead of showing error
         setState(prev => ({ 
           ...prev, 
           isInRoom: false, 
+          isInQueue: true,
           roomId: null,
-          remoteStream: null 
+          messages: [],
+          remoteStream: null,
+          error: null // Clear any errors
         }));
-        cleanupWebRTC();
+        
+        // Automatically rejoin queue
+        setTimeout(() => {
+          if (socketRef.current) {
+            console.log('🔄 Auto-rejoining queue after user left');
+            socketRef.current.emit('join-queue', { chatType: 'video' });
+          }
+        }, 1000);
       });
 
       socket.on('error', (error) => {
@@ -225,17 +240,25 @@ export const useChatRoom = () => {
       peerConnectionRef.current = new RTCPeerConnection(configuration);
 
       // Get local media stream with mobile-friendly constraints
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
+        video: isMobile ? {
+          width: { ideal: 640, min: 320 },
+          height: { ideal: 480, min: 240 },
+          facingMode: 'user', // Use front camera on mobile
+          frameRate: { ideal: 24, min: 15 }
+        } : {
           width: { ideal: 1280, min: 640 },
           height: { ideal: 720, min: 480 },
-          facingMode: 'user', // Use front camera on mobile
           frameRate: { ideal: 30, min: 15 }
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          sampleRate: { ideal: 48000 },
+          channelCount: { ideal: 2 }
         }
       });
 
@@ -264,7 +287,10 @@ export const useChatRoom = () => {
           console.log('✅ WebRTC connection established!');
         } else if (peerConnectionRef.current?.connectionState === 'failed') {
           console.error('❌ WebRTC connection failed');
-          setState(prev => ({ ...prev, error: 'WebRTC connection failed. Please try again.' }));
+          // Don't show error if we're already leaving the room
+          if (state.isInRoom) {
+            setState(prev => ({ ...prev, error: 'Connection lost. Looking for new stranger...' }));
+          }
         }
       };
 
