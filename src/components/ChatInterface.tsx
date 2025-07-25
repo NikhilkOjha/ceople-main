@@ -32,9 +32,42 @@ const ChatInterface = () => {
   } = useChatRoom();
 
   const [messageInput, setMessageInput] = useState('');
+  const [permissionRequested, setPermissionRequested] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Request camera permission
+  const requestCameraPermission = async () => {
+    try {
+      setPermissionRequested(true);
+      console.log('📱 Requesting camera permission...');
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      console.log('✅ Camera permission granted');
+      // Stop the test stream
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Now join the queue
+      joinQueue('video');
+    } catch (error) {
+      console.error('❌ Camera permission denied:', error);
+      setPermissionRequested(false);
+      alert('Camera permission is required for video chat. Please allow camera access and try again.');
+    }
+  };
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -109,12 +142,13 @@ const ChatInterface = () => {
             ) : (
               <div className="space-y-3">
                 <Button 
-                  onClick={() => joinQueue('video')} 
+                  onClick={requestCameraPermission}
+                  disabled={permissionRequested}
                   className="w-full"
                   size="lg"
                 >
                   <Video className="mr-2 h-4 w-4" />
-                  Start Video Chat
+                  {permissionRequested ? 'Requesting Permission...' : 'Start Video Chat'}
                 </Button>
                 <Button 
                   onClick={() => joinQueue('text')} 

@@ -100,7 +100,17 @@ export const useChatRoom = () => {
           isInRoom: true, 
           roomId: data.roomId 
         }));
-        initializeWebRTC();
+        
+        // Only the first user (smaller userId) creates the offer
+        const isInitiator = data.isInitiator || false;
+        console.log('🎯 User role:', isInitiator ? 'Initiator (will create offer)' : 'Responder (will wait for offer)');
+        
+        if (isInitiator) {
+          initializeWebRTC();
+        } else {
+          // Wait for the other user to create the offer
+          console.log('⏳ Waiting for other user to create offer...');
+        }
       });
 
       socket.on('new-message', (message) => {
@@ -291,14 +301,20 @@ export const useChatRoom = () => {
 
   // Handle WebRTC signaling
   const handleWebRTCSignal = useCallback(async (data: any) => {
-    if (!peerConnectionRef.current) {
-      console.log('⚠️ No peer connection available for signal');
-      return;
-    }
-
     try {
       const { signal } = data;
       console.log('📡 Received WebRTC signal:', signal.type);
+
+      // If we receive an offer but don't have a peer connection yet, initialize it
+      if (signal.type === 'offer' && !peerConnectionRef.current) {
+        console.log('📥 Received offer before WebRTC initialization, creating peer connection...');
+        await initializeWebRTC();
+      }
+
+      if (!peerConnectionRef.current) {
+        console.log('⚠️ No peer connection available for signal');
+        return;
+      }
 
       if (signal.type === 'offer') {
         console.log('📥 Setting remote description (offer)');
@@ -327,7 +343,7 @@ export const useChatRoom = () => {
       console.error('❌ Error handling WebRTC signal:', error);
       setState(prev => ({ ...prev, error: `WebRTC signal error: ${error.message}` }));
     }
-  }, [state.roomId]);
+  }, [state.roomId, initializeWebRTC]);
 
   // Toggle video
   const toggleVideo = useCallback(() => {

@@ -300,12 +300,12 @@ async function findMatch(userId, chatType) {
 
     if (userSocket) {
       userSocket.join(roomId);
-      userSocket.emit('match-found', { roomId, chatType });
+      userSocket.emit('match-found', { roomId, chatType, isInitiator: true });
     }
 
     if (otherUserSocket) {
       otherUserSocket.join(roomId);
-      otherUserSocket.emit('match-found', { roomId, chatType });
+      otherUserSocket.emit('match-found', { roomId, chatType, isInitiator: false });
     }
 
     // Remove from waiting users
