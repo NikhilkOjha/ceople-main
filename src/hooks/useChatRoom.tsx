@@ -182,8 +182,12 @@ export const useChatRoom = () => {
       const configuration = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' }
+        ],
+        iceCandidatePoolSize: 10
       };
 
       peerConnectionRef.current = new RTCPeerConnection(configuration);
@@ -206,8 +210,24 @@ export const useChatRoom = () => {
 
       // Handle incoming streams
       peerConnectionRef.current.ontrack = (event) => {
-        console.log('Received remote stream');
+        console.log('✅ Received remote stream:', event.streams[0]);
         setState(prev => ({ ...prev, remoteStream: event.streams[0] }));
+      };
+
+      // Handle connection state changes
+      peerConnectionRef.current.onconnectionstatechange = () => {
+        console.log('🔗 WebRTC connection state:', peerConnectionRef.current?.connectionState);
+        if (peerConnectionRef.current?.connectionState === 'connected') {
+          console.log('✅ WebRTC connection established!');
+        } else if (peerConnectionRef.current?.connectionState === 'failed') {
+          console.error('❌ WebRTC connection failed');
+          setState(prev => ({ ...prev, error: 'WebRTC connection failed. Please try again.' }));
+        }
+      };
+
+      // Handle ICE connection state changes
+      peerConnectionRef.current.oniceconnectionstatechange = () => {
+        console.log('🧊 ICE connection state:', peerConnectionRef.current?.iceConnectionState);
       };
 
       // Handle ICE candidates
@@ -240,17 +260,25 @@ export const useChatRoom = () => {
 
   // Handle WebRTC signaling
   const handleWebRTCSignal = useCallback(async (data: any) => {
-    if (!peerConnectionRef.current) return;
+    if (!peerConnectionRef.current) {
+      console.log('⚠️ No peer connection available for signal');
+      return;
+    }
 
     try {
       const { signal } = data;
+      console.log('📡 Received WebRTC signal:', signal.type);
 
       if (signal.type === 'offer') {
+        console.log('📥 Setting remote description (offer)');
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        
+        console.log('📤 Creating answer');
         const answer = await peerConnectionRef.current.createAnswer();
         await peerConnectionRef.current.setLocalDescription(answer);
 
         if (socketRef.current) {
+          console.log('📤 Sending answer');
           socketRef.current.emit('webrtc-signal', {
             roomId: state.roomId,
             signal: { type: 'answer', sdp: answer },
@@ -258,12 +286,15 @@ export const useChatRoom = () => {
           });
         }
       } else if (signal.type === 'answer') {
+        console.log('📥 Setting remote description (answer)');
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
       } else if (signal.type === 'ice-candidate') {
+        console.log('🧊 Adding ICE candidate');
         await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
       }
     } catch (error) {
-      console.error('Error handling WebRTC signal:', error);
+      console.error('❌ Error handling WebRTC signal:', error);
+      setState(prev => ({ ...prev, error: `WebRTC signal error: ${error.message}` }));
     }
   }, [state.roomId]);
 
@@ -293,6 +324,11 @@ export const useChatRoom = () => {
   const toggleScreenSharing = useCallback(async () => {
     try {
       if (!state.isScreenSharing) {
+        // Check if screen sharing is supported
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          throw new Error('Screen sharing is not supported in this browser');
+        }
+
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: false
@@ -306,11 +342,12 @@ export const useChatRoom = () => {
             s.track?.kind === 'video'
           );
           if (sender) {
-            sender.replaceTrack(videoTrack);
+            await sender.replaceTrack(videoTrack);
+            console.log('Screen sharing started successfully');
           }
         }
 
-        setState(prev => ({ ...prev, isScreenSharing: true }));
+        setState(prev => ({ ...prev, isScreenSharing: true, error: null }));
       } else {
         if (screenStreamRef.current) {
           screenStreamRef.current.getTracks().forEach(track => track.stop());
@@ -323,14 +360,34 @@ export const useChatRoom = () => {
             s.track?.kind === 'video'
           );
           if (sender && videoTrack) {
-            sender.replaceTrack(videoTrack);
+            await sender.replaceTrack(videoTrack);
+            console.log('Screen sharing stopped, camera restored');
           }
         }
 
-        setState(prev => ({ ...prev, isScreenSharing: false }));
+        setState(prev => ({ ...prev, isScreenSharing: false, error: null }));
       }
     } catch (error) {
       console.error('Error toggling screen sharing:', error);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to toggle screen sharing';
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = 'Screen sharing permission denied. Please allow screen sharing when prompted.';
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = 'Screen sharing is not supported in this browser.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = 'No screen or window found to share.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setState(prev => ({ ...prev, error: errorMessage }));
+      
+      // Reset screen sharing state on error
+      setState(prev => ({ ...prev, isScreenSharing: false }));
     }
   }, [state.isScreenSharing]);
 
