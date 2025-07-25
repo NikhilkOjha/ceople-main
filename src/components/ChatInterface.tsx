@@ -60,6 +60,9 @@ const ChatInterface = () => {
       // Stop the test stream
       stream.getTracks().forEach(track => track.stop());
       
+      // Reset permission state
+      setPermissionRequested(false);
+      
       // Now join the queue
       joinQueue('video');
     } catch (error) {
@@ -68,6 +71,13 @@ const ChatInterface = () => {
       alert('Camera permission is required for video chat. Please allow camera access and try again.');
     }
   };
+
+  // Reset permission state when leaving room
+  useEffect(() => {
+    if (!isInRoom && !isInQueue) {
+      setPermissionRequested(false);
+    }
+  }, [isInRoom, isInQueue]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

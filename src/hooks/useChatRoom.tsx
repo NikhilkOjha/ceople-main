@@ -101,16 +101,19 @@ export const useChatRoom = () => {
           roomId: data.roomId 
         }));
         
-        // Only the first user (smaller userId) creates the offer
-        const isInitiator = data.isInitiator || false;
-        console.log('🎯 User role:', isInitiator ? 'Initiator (will create offer)' : 'Responder (will wait for offer)');
-        
-        if (isInitiator) {
-          initializeWebRTC();
-        } else {
-          // Wait for the other user to create the offer
-          console.log('⏳ Waiting for other user to create offer...');
-        }
+        // Initialize WebRTC for both users
+        initializeWebRTC().then(() => {
+          // Only the initiator creates the offer
+          const isInitiator = data.isInitiator || false;
+          console.log('🎯 User role:', isInitiator ? 'Initiator (will create offer)' : 'Responder (will wait for offer)');
+          
+          if (isInitiator) {
+            // Small delay to ensure both users are ready
+            setTimeout(() => {
+              createOffer();
+            }, 1000);
+          }
+        });
       });
 
       socket.on('new-message', (message) => {
@@ -189,6 +192,8 @@ export const useChatRoom = () => {
   // Initialize WebRTC
   const initializeWebRTC = useCallback(async () => {
     try {
+      console.log('🚀 Initializing WebRTC...');
+      
       const configuration = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -263,19 +268,7 @@ export const useChatRoom = () => {
         }
       };
 
-      // Create and send offer
-      console.log('📤 Creating offer...');
-      const offer = await peerConnectionRef.current.createOffer();
-      await peerConnectionRef.current.setLocalDescription(offer);
-
-      if (socketRef.current) {
-        console.log('📤 Sending offer');
-        socketRef.current.emit('webrtc-signal', {
-          roomId: state.roomId,
-          signal: { type: 'offer', sdp: offer },
-          targetUserId: null
-        });
-      }
+      console.log('✅ WebRTC initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing WebRTC:', error);
       
@@ -299,17 +292,36 @@ export const useChatRoom = () => {
     }
   }, [state.roomId]);
 
+  // Create and send offer
+  const createOffer = useCallback(async () => {
+    if (!peerConnectionRef.current) {
+      console.error('❌ No peer connection available for offer');
+      return;
+    }
+
+    try {
+      console.log('📤 Creating offer...');
+      const offer = await peerConnectionRef.current.createOffer();
+      await peerConnectionRef.current.setLocalDescription(offer);
+
+      if (socketRef.current) {
+        console.log('📤 Sending offer');
+        socketRef.current.emit('webrtc-signal', {
+          roomId: state.roomId,
+          signal: { type: 'offer', sdp: offer },
+          targetUserId: null
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error creating offer:', error);
+    }
+  }, [state.roomId]);
+
   // Handle WebRTC signaling
   const handleWebRTCSignal = useCallback(async (data: any) => {
     try {
       const { signal } = data;
       console.log('📡 Received WebRTC signal:', signal.type);
-
-      // If we receive an offer but don't have a peer connection yet, initialize it
-      if (signal.type === 'offer' && !peerConnectionRef.current) {
-        console.log('📥 Received offer before WebRTC initialization, creating peer connection...');
-        await initializeWebRTC();
-      }
 
       if (!peerConnectionRef.current) {
         console.log('⚠️ No peer connection available for signal');
@@ -343,7 +355,7 @@ export const useChatRoom = () => {
       console.error('❌ Error handling WebRTC signal:', error);
       setState(prev => ({ ...prev, error: `WebRTC signal error: ${error.message}` }));
     }
-  }, [state.roomId, initializeWebRTC]);
+  }, [state.roomId]);
 
   // Toggle video
   const toggleVideo = useCallback(() => {
