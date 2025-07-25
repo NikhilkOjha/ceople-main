@@ -108,11 +108,17 @@ export const useChatRoom = () => {
         // Wait for state to update, then initialize WebRTC
         setTimeout(() => {
           initializeWebRTC().then(() => {
-            console.log('✅ WebRTC initialized, creating offer...');
-            // Both users create offers - the first one wins
-            setTimeout(() => {
-              createOfferWithRoomId(data.roomId);
-            }, 500);
+            console.log('✅ WebRTC initialized');
+            
+            // Only the initiator creates an offer
+            if (data.isInitiator) {
+              console.log('🎯 I am the initiator, creating offer...');
+              setTimeout(() => {
+                createOfferWithRoomId(data.roomId);
+              }, 500);
+            } else {
+              console.log('🎯 I am the responder, waiting for offer...');
+            }
           }).catch(error => {
             console.error('❌ Error initializing WebRTC:', error);
           });
