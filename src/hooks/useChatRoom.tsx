@@ -101,22 +101,13 @@ export const useChatRoom = () => {
           roomId: data.roomId 
         }));
         
-        // Initialize WebRTC for both users
+        // Both users initialize WebRTC and create offers
         initializeWebRTC().then(() => {
-          // Only the initiator creates the offer
-          const isInitiator = data.isInitiator || false;
-          console.log('🎯 User role:', isInitiator ? 'Initiator (will create offer)' : 'Responder (will wait for offer)');
-          
-          if (isInitiator) {
-            console.log('⏰ Initiator: Waiting 1 second before creating offer...');
-            // Small delay to ensure both users are ready
-            setTimeout(() => {
-              console.log('🚀 Initiator: Creating offer now...');
-              createOffer();
-            }, 1000);
-          } else {
-            console.log('⏳ Responder: Waiting for initiator to create offer...');
-          }
+          console.log('✅ WebRTC initialized, creating offer...');
+          // Both users create offers - the first one wins
+          setTimeout(() => {
+            createOffer();
+          }, 500);
         }).catch(error => {
           console.error('❌ Error initializing WebRTC:', error);
         });
@@ -332,7 +323,7 @@ export const useChatRoom = () => {
   const handleWebRTCSignal = useCallback(async (data: any) => {
     try {
       const { signal } = data;
-      console.log('📡 Received WebRTC signal:', signal.type, 'from room:', data.roomId);
+      console.log('📡 Received WebRTC signal:', signal.type);
 
       if (!peerConnectionRef.current) {
         console.log('⚠️ No peer connection available for signal');
@@ -340,35 +331,36 @@ export const useChatRoom = () => {
       }
 
       if (signal.type === 'offer') {
+        // Check if we already have a remote description
+        if (peerConnectionRef.current.remoteDescription) {
+          console.log('⚠️ Already have remote description, ignoring duplicate offer');
+          return;
+        }
+        
         console.log('📥 Setting remote description (offer)');
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
         
         console.log('📤 Creating answer');
         const answer = await peerConnectionRef.current.createAnswer();
-        console.log('📤 Answer created, setting local description...');
         await peerConnectionRef.current.setLocalDescription(answer);
 
         if (socketRef.current) {
-          console.log('📤 Sending answer via socket...');
+          console.log('📤 Sending answer');
           socketRef.current.emit('webrtc-signal', {
             roomId: state.roomId,
             signal: { type: 'answer', sdp: answer },
             targetUserId: null
           });
-          console.log('✅ Answer sent successfully');
         }
       } else if (signal.type === 'answer') {
         console.log('📥 Setting remote description (answer)');
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-        console.log('✅ Remote description set successfully');
       } else if (signal.type === 'ice-candidate') {
         console.log('🧊 Adding ICE candidate');
         await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
-        console.log('✅ ICE candidate added successfully');
       }
     } catch (error) {
       console.error('❌ Error handling WebRTC signal:', error);
-      setState(prev => ({ ...prev, error: `WebRTC signal error: ${error.message}` }));
     }
   }, [state.roomId]);
 
