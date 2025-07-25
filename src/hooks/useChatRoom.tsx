@@ -228,13 +228,36 @@ export const useChatRoom = () => {
       
       const configuration = {
         iceServers: [
+          // STUN servers
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' }
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // TURN servers for mobile/NAT traversal
+          { 
+            urls: [
+              'turn:openrelay.metered.ca:80',
+              'turn:openrelay.metered.ca:443',
+              'turn:openrelay.metered.ca:443?transport=tcp'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: [
+              'turn:global.turn.twilio.com:3478?transport=udp',
+              'turn:global.turn.twilio.com:3478?transport=tcp',
+              'turn:global.turn.twilio.com:443?transport=tcp'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
         ],
-        iceCandidatePoolSize: 10
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all' as RTCIceTransportPolicy,
+        bundlePolicy: 'max-bundle' as RTCBundlePolicy,
+        rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
       };
 
       peerConnectionRef.current = new RTCPeerConnection(configuration);
@@ -296,7 +319,16 @@ export const useChatRoom = () => {
 
       // Handle ICE connection state changes
       peerConnectionRef.current.oniceconnectionstatechange = () => {
-        console.log('🧊 ICE connection state:', peerConnectionRef.current?.iceConnectionState);
+        const iceState = peerConnectionRef.current?.iceConnectionState;
+        console.log('🧊 ICE connection state:', iceState);
+        
+        if (iceState === 'failed') {
+          console.error('❌ ICE connection failed - this often happens on mobile networks');
+          console.log('📱 Mobile detection:', isMobile);
+          console.log('🌐 Network info:', (navigator as any).connection || 'Not available');
+        } else if (iceState === 'connected') {
+          console.log('✅ ICE connection established successfully');
+        }
       };
 
       // Handle ICE candidates
