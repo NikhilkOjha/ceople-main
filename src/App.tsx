@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ChatInterface from "./components/ChatInterface";
 import TextChatInterface from "./components/TextChatInterface";
+import SocialBar from "./components/SocialBar";
 
 import NotFound from "./pages/NotFound";
 
@@ -20,6 +21,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <SocialBar />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
