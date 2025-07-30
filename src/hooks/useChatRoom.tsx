@@ -228,13 +228,18 @@ export const useChatRoom = () => {
       
       const configuration = {
         iceServers: [
-          // STUN servers
+          // Primary STUN servers
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
           { urls: 'stun:stun4.l.google.com:19302' },
-          // TURN servers for mobile/NAT traversal
+          // Additional STUN servers for better connectivity
+          { urls: 'stun:stun.voiparound.com:3478' },
+          { urls: 'stun:stun.voipbuster.com:3478' },
+          { urls: 'stun:stun.voipstunt.com:3478' },
+          { urls: 'stun:stun.voxgratia.org:3478' },
+          // TURN servers for mobile/NAT traversal (free public servers)
           { 
             urls: [
               'turn:openrelay.metered.ca:80',
@@ -246,18 +251,19 @@ export const useChatRoom = () => {
           },
           {
             urls: [
-              'turn:global.turn.twilio.com:3478?transport=udp',
-              'turn:global.turn.twilio.com:3478?transport=tcp',
-              'turn:global.turn.twilio.com:443?transport=tcp'
+              'turn:openrelay.metered.ca:3478?transport=udp',
+              'turn:openrelay.metered.ca:3478?transport=tcp'
             ],
             username: 'openrelayproject',
             credential: 'openrelayproject'
           }
         ],
-        iceCandidatePoolSize: 10,
+        iceCandidatePoolSize: 20,
         iceTransportPolicy: 'all' as RTCIceTransportPolicy,
         bundlePolicy: 'max-bundle' as RTCBundlePolicy,
-        rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
+        rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy,
+        // Additional configuration for better mobile connectivity
+        iceServersPolicy: 'all' as any
       };
 
       peerConnectionRef.current = new RTCPeerConnection(configuration);
@@ -267,10 +273,11 @@ export const useChatRoom = () => {
       
       const stream = await navigator.mediaDevices.getUserMedia({
         video: isMobile ? {
-          width: { ideal: 640, min: 320 },
-          height: { ideal: 480, min: 240 },
+          width: { ideal: 480, min: 240 },
+          height: { ideal: 360, min: 180 },
           facingMode: 'user', // Use front camera on mobile
-          frameRate: { ideal: 24, min: 15 }
+          frameRate: { ideal: 15, min: 10 },
+          aspectRatio: { ideal: 4/3 }
         } : {
           width: { ideal: 1280, min: 640 },
           height: { ideal: 720, min: 480 },
@@ -280,8 +287,8 @@ export const useChatRoom = () => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 2 }
+          sampleRate: { ideal: 44100 },
+          channelCount: { ideal: 1 }
         }
       });
 
@@ -312,7 +319,30 @@ export const useChatRoom = () => {
           console.error('❌ WebRTC connection failed');
           // Don't show error if we're already leaving the room
           if (state.isInRoom) {
-            setState(prev => ({ ...prev, error: 'Connection lost. Looking for new stranger...' }));
+            // Try to reconnect once before showing error
+            setTimeout(() => {
+              if (peerConnectionRef.current?.connectionState === 'failed' && state.isInRoom) {
+                console.log('🔄 Attempting to reconnect after failure...');
+                peerConnectionRef.current?.restartIce();
+              }
+            }, 3000);
+            
+            // Show error after retry attempt
+            setTimeout(() => {
+              if (state.isInRoom) {
+                setState(prev => ({ ...prev, error: 'Connection lost. Looking for new stranger...' }));
+              }
+            }, 8000);
+          }
+        } else if (peerConnectionRef.current?.connectionState === 'disconnected') {
+          console.log('⚠️ WebRTC connection disconnected, attempting to reconnect...');
+          if (state.isInRoom) {
+            setTimeout(() => {
+              if (peerConnectionRef.current && state.isInRoom) {
+                console.log('🔄 Attempting to reconnect after disconnect...');
+                peerConnectionRef.current.restartIce();
+              }
+            }, 2000);
           }
         }
       };
@@ -326,8 +356,23 @@ export const useChatRoom = () => {
           console.error('❌ ICE connection failed - this often happens on mobile networks');
           console.log('📱 Mobile detection:', isMobile);
           console.log('🌐 Network info:', (navigator as any).connection || 'Not available');
+          
+          // Try to restart ICE on failure
+          if (peerConnectionRef.current && state.isInRoom) {
+            console.log('🔄 Attempting to restart ICE...');
+            peerConnectionRef.current.restartIce();
+          }
         } else if (iceState === 'connected') {
           console.log('✅ ICE connection established successfully');
+        } else if (iceState === 'disconnected') {
+          console.log('⚠️ ICE connection disconnected, attempting to reconnect...');
+          // Try to restart ICE on disconnect
+          if (peerConnectionRef.current && state.isInRoom) {
+            setTimeout(() => {
+              console.log('🔄 Attempting to restart ICE after disconnect...');
+              peerConnectionRef.current?.restartIce();
+            }, 2000);
+          }
         }
       };
 
