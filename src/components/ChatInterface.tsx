@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Video, VideoOff, Mic, MicOff, SkipForward, X, Send, Phone, PhoneOff, Monitor } from 'lucide-react';
 
 const ChatInterface = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const {
     isConnected,
     isInQueue,
@@ -148,6 +148,12 @@ const ChatInterface = () => {
                 </p>
                 <Button variant="outline" onClick={leaveRoom}>
                   Cancel
+                </Button>
+                <Button variant="destructive" onClick={async () => {
+                  await signOut();
+                  window.location.href = '/auth';
+                }}>
+                  Log Out
                 </Button>
               </div>
             ) : (

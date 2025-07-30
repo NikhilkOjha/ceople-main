@@ -23,22 +23,38 @@ const Auth = () => {
     e.preventDefault();
     setIsLoading(true);
 
+    console.log('📱 Mobile sign in attempt...');
+    
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
-    const { error } = await signIn(email, password);
-    
-    if (error) {
+    console.log('📧 Email:', email);
+    console.log('🔑 Password length:', password.length);
+
+    try {
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        console.error('❌ Sign in error:', error);
+        toast({
+          title: "Sign In Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        console.log('✅ Sign in successful');
+        toast({
+          title: "Welcome back!",
+          description: "You've been signed in successfully.",
+        });
+      }
+    } catch (error) {
+      console.error('❌ Sign in exception:', error);
       toast({
         title: "Sign In Failed",
-        description: error.message,
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Welcome back!",
-        description: "You've been signed in successfully.",
       });
     }
     

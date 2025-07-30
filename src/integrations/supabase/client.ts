@@ -8,10 +8,59 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Mobile-safe storage implementation
+const getMobileSafeStorage = () => {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  if (isMobile) {
+    // Use sessionStorage as fallback for mobile devices
+    return {
+      getItem: (key: string) => {
+        try {
+          return localStorage.getItem(key) || sessionStorage.getItem(key);
+        } catch (error) {
+          console.warn('Storage access error:', error);
+          return sessionStorage.getItem(key);
+        }
+      },
+      setItem: (key: string, value: string) => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (error) {
+          console.warn('localStorage setItem failed, using sessionStorage:', error);
+          sessionStorage.setItem(key, value);
+        }
+      },
+      removeItem: (key: string) => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch (error) {
+          console.warn('Storage removeItem error:', error);
+        }
+      }
+    };
+  }
+  
+  return localStorage;
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: getMobileSafeStorage(),
     persistSession: true,
     autoRefreshToken: true,
-  }
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'ceople-web',
+    },
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });
