@@ -12,6 +12,7 @@ import SocialBar from "./components/SocialBar";
 import { Analytics } from "@vercel/analytics/react";
 
 import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/Landing";
 
 
 const queryClient = new QueryClient();
@@ -26,7 +27,7 @@ const App = () => (
         <SocialBar />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/chat" element={<ChatInterface />} />
             <Route path="/text-chat" element={<TextChatInterface />} />
