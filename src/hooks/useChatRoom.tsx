@@ -256,9 +256,19 @@ export const useChatRoom = () => {
             ],
             username: 'openrelayproject',
             credential: 'openrelayproject'
+          },
+          // Additional TURN servers for better mobile connectivity
+          {
+            urls: [
+              'turn:relay.metered.ca:80',
+              'turn:relay.metered.ca:443',
+              'turn:relay.metered.ca:443?transport=tcp'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
           }
         ],
-        iceCandidatePoolSize: 20,
+        iceCandidatePoolSize: 30,
         iceTransportPolicy: 'all' as RTCIceTransportPolicy,
         bundlePolicy: 'max-bundle' as RTCBundlePolicy,
         rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy,
@@ -267,6 +277,14 @@ export const useChatRoom = () => {
       };
 
       peerConnectionRef.current = new RTCPeerConnection(configuration);
+      
+      // Set a connection timeout for mobile devices
+      const connectionTimeout = setTimeout(() => {
+        if (peerConnectionRef.current?.connectionState === 'connecting' && state.isInRoom) {
+          console.log('⏰ Connection timeout reached, restarting ICE...');
+          peerConnectionRef.current.restartIce();
+        }
+      }, 15000); // 15 seconds timeout
 
       // Get local media stream with mobile-friendly constraints
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -307,6 +325,21 @@ export const useChatRoom = () => {
       peerConnectionRef.current.ontrack = (event) => {
         console.log('✅ Received remote stream:', event.streams[0]);
         console.log('📹 Remote stream tracks:', event.streams[0].getTracks().map(t => t.kind));
+        
+        // Check if we actually have video/audio tracks
+        const videoTracks = event.streams[0].getVideoTracks();
+        const audioTracks = event.streams[0].getAudioTracks();
+        
+        console.log('📹 Video tracks:', videoTracks.length);
+        console.log('🎵 Audio tracks:', audioTracks.length);
+        
+        if (videoTracks.length > 0) {
+          console.log('📹 Video track ready state:', videoTracks[0].readyState);
+        }
+        if (audioTracks.length > 0) {
+          console.log('🎵 Audio track ready state:', audioTracks[0].readyState);
+        }
+        
         setState(prev => ({ ...prev, remoteStream: event.streams[0] }));
       };
 
@@ -315,24 +348,31 @@ export const useChatRoom = () => {
         console.log('🔗 WebRTC connection state:', peerConnectionRef.current?.connectionState);
         if (peerConnectionRef.current?.connectionState === 'connected') {
           console.log('✅ WebRTC connection established!');
+          clearTimeout(connectionTimeout); // Clear timeout on successful connection
         } else if (peerConnectionRef.current?.connectionState === 'failed') {
           console.error('❌ WebRTC connection failed');
           // Don't show error if we're already leaving the room
           if (state.isInRoom) {
-            // Try to reconnect once before showing error
-            setTimeout(() => {
-              if (peerConnectionRef.current?.connectionState === 'failed' && state.isInRoom) {
-                console.log('🔄 Attempting to reconnect after failure...');
-                peerConnectionRef.current?.restartIce();
-              }
-            }, 3000);
+            // Try to reconnect multiple times
+            let retryCount = 0;
+            const maxRetries = 3;
             
-            // Show error after retry attempt
-            setTimeout(() => {
-              if (state.isInRoom) {
+            const attemptReconnect = () => {
+              if (retryCount < maxRetries && peerConnectionRef.current?.connectionState === 'failed' && state.isInRoom) {
+                retryCount++;
+                console.log(`🔄 Attempting to reconnect (attempt ${retryCount}/${maxRetries})...`);
+                peerConnectionRef.current?.restartIce();
+                
+                // Try again after 5 seconds
+                setTimeout(attemptReconnect, 5000);
+              } else if (retryCount >= maxRetries && state.isInRoom) {
+                console.log('❌ Max reconnection attempts reached');
                 setState(prev => ({ ...prev, error: 'Connection lost. Looking for new stranger...' }));
               }
-            }, 8000);
+            };
+            
+            // Start reconnection attempts
+            setTimeout(attemptReconnect, 3000);
           }
         } else if (peerConnectionRef.current?.connectionState === 'disconnected') {
           console.log('⚠️ WebRTC connection disconnected, attempting to reconnect...');
