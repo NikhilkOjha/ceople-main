@@ -9,7 +9,7 @@ import Auth from "./pages/Auth";
 import ChatInterface from "./components/ChatInterface";
 import VideoConference from "./components/VideoConference";
 import NotFound from "./pages/NotFound";
-import { MobileDebug } from "./components/MobileDebug";
+
 
 const queryClient = new QueryClient();
 
@@ -29,7 +29,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-        <MobileDebug />
+
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
