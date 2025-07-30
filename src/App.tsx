@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import ChatInterface from "./components/ChatInterface";
 import TextChatInterface from "./components/TextChatInterface";
 import SocialBar from "./components/SocialBar";
+import { Analytics } from "@vercel/analytics/react";
 
 import NotFound from "./pages/NotFound";
 
@@ -21,6 +22,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <Analytics />
         <SocialBar />
         <BrowserRouter>
           <Routes>
