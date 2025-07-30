@@ -71,21 +71,6 @@ const Index = () => {
 
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader>
-              <Video className="h-8 w-8 text-primary mb-2" />
-              <CardTitle>Video Conference</CardTitle>
-              <CardDescription>
-                Professional video conference interface with chat and controls
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link to="/video">
-                <Button className="w-full">View Conference UI</Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
               <MessageCircle className="h-8 w-8 text-primary mb-2" />
               <CardTitle>Text Chat</CardTitle>
               <CardDescription>
@@ -93,7 +78,7 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link to="/chat">
+              <Link to="/text-chat">
                 <Button variant="outline" className="w-full">Start Text Chat</Button>
               </Link>
             </CardContent>
