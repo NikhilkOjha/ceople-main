@@ -284,7 +284,7 @@ export const useChatRoom = () => {
           console.log('⏰ Connection timeout reached, restarting ICE...');
           peerConnectionRef.current.restartIce();
         }
-      }, 15000); // 15 seconds timeout
+      }, 10000); // 10 seconds timeout for faster recovery
 
       // Get local media stream with mobile-friendly constraints
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -297,9 +297,9 @@ export const useChatRoom = () => {
           frameRate: { ideal: 15, min: 10 },
           aspectRatio: { ideal: 4/3 }
         } : {
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 },
-          frameRate: { ideal: 30, min: 15 }
+          width: { ideal: 640, min: 480 },
+          height: { ideal: 480, min: 360 },
+          frameRate: { ideal: 24, min: 15 }
         },
         audio: {
           echoCancellation: true,
@@ -355,16 +355,28 @@ export const useChatRoom = () => {
           if (state.isInRoom) {
             // Try to reconnect multiple times
             let retryCount = 0;
-            const maxRetries = 3;
+            const maxRetries = 5; // Increased retries for mobile-to-desktop
             
             const attemptReconnect = () => {
               if (retryCount < maxRetries && peerConnectionRef.current?.connectionState === 'failed' && state.isInRoom) {
                 retryCount++;
                 console.log(`🔄 Attempting to reconnect (attempt ${retryCount}/${maxRetries})...`);
-                peerConnectionRef.current?.restartIce();
                 
-                // Try again after 5 seconds
-                setTimeout(attemptReconnect, 5000);
+                // Force a complete reconnection for mobile-to-desktop
+                if (retryCount > 2) {
+                  console.log('🔄 Force reconnection - recreating peer connection...');
+                  cleanupWebRTC();
+                  setTimeout(() => {
+                    if (state.isInRoom) {
+                      initializeWebRTC();
+                    }
+                  }, 1000);
+                } else {
+                  peerConnectionRef.current?.restartIce();
+                }
+                
+                // Try again after 3 seconds for faster recovery
+                setTimeout(attemptReconnect, 3000);
               } else if (retryCount >= maxRetries && state.isInRoom) {
                 console.log('❌ Max reconnection attempts reached');
                 setState(prev => ({ ...prev, error: 'Connection lost. Looking for new stranger...' }));
@@ -372,7 +384,7 @@ export const useChatRoom = () => {
             };
             
             // Start reconnection attempts
-            setTimeout(attemptReconnect, 3000);
+            setTimeout(attemptReconnect, 2000);
           }
         } else if (peerConnectionRef.current?.connectionState === 'disconnected') {
           console.log('⚠️ WebRTC connection disconnected, attempting to reconnect...');

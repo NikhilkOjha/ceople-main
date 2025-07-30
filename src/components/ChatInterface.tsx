@@ -232,8 +232,11 @@ const ChatInterface = () => {
   // Video chat interface
   return (
     <div className="min-h-screen bg-background p-4 relative">
-      {/* Fixed Header with Logout Button */}
-      <div className="fixed top-0 right-0 left-0 z-50 flex justify-end items-center bg-white/80 border-b border-gray-200 px-4 py-2" style={{backdropFilter: 'blur(8px)'}}>
+      {/* Fixed Header with Username and Logout Button */}
+      <div className="fixed top-0 right-0 left-0 z-50 flex justify-between items-center bg-white/80 border-b border-gray-200 px-4 py-2" style={{backdropFilter: 'blur(8px)'}}>
+        <div className="text-sm font-medium text-gray-700">
+          Hello, {user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}!
+        </div>
         <Button variant="outline" size="sm" onClick={async () => {
           await signOut();
           window.location.href = '/auth';
@@ -246,15 +249,18 @@ const ChatInterface = () => {
           
           {/* Video Area */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge variant={isInRoom ? 'default' : 'secondary'}>
-                  {isInRoom ? 'Connected' : 'Waiting'}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  Room: {roomId?.slice(0, 8)}...
-                </span>
-              </div>
+                      <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant={isInRoom ? 'default' : 'secondary'}>
+                {isInRoom ? 'Connected' : 'Waiting'}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                Room: {roomId?.slice(0, 8)}...
+              </span>
+              <span className="text-sm text-muted-foreground">
+                • {user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}
+              </span>
+            </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => {
                   leaveRoom();

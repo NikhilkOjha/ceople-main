@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Lock, Chrome } from 'lucide-react';
+import { Mail, Lock, Chrome, User } from 'lucide-react';
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
@@ -67,6 +67,7 @@ const Auth = () => {
 
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
+    const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
 
@@ -80,7 +81,17 @@ const Auth = () => {
       return;
     }
 
-    const { error } = await signUp(email, password);
+    if (!username || username.trim().length < 3) {
+      toast({
+        title: "Invalid Username",
+        description: "Username must be at least 3 characters long.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const { error } = await signUp(email, password, username);
     
     if (error) {
       if (error.message.includes('User already registered')) {
@@ -242,6 +253,24 @@ const Auth = () => {
               
               <TabsContent value="signup" className="mt-6">
                 <form onSubmit={handleSignUp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-username" className="text-white text-sm font-medium">
+                      Username
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-white/60" />
+                      <Input
+                        id="signup-username"
+                        name="username"
+                        type="text"
+                        placeholder="Choose a username"
+                        className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/60 focus:ring-primary focus:border-primary"
+                        required
+                        minLength={3}
+                      />
+                    </div>
+                  </div>
+                  
                   <div className="space-y-2">
                     <Label htmlFor="signup-email" className="text-white text-sm font-medium">
                       Email
