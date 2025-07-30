@@ -266,9 +266,19 @@ export const useChatRoom = () => {
             ],
             username: 'openrelayproject',
             credential: 'openrelayproject'
+          },
+          // More TURN servers for mobile-to-desktop
+          {
+            urls: [
+              'turn:global.turn.twilio.com:3478?transport=udp',
+              'turn:global.turn.twilio.com:3478?transport=tcp',
+              'turn:global.turn.twilio.com:443?transport=tcp'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
           }
         ],
-        iceCandidatePoolSize: 30,
+        iceCandidatePoolSize: 50,
         iceTransportPolicy: 'all' as RTCIceTransportPolicy,
         bundlePolicy: 'max-bundle' as RTCBundlePolicy,
         rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy,
@@ -289,26 +299,50 @@ export const useChatRoom = () => {
       // Get local media stream with mobile-friendly constraints
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: isMobile ? {
-          width: { ideal: 480, min: 240 },
-          height: { ideal: 360, min: 180 },
-          facingMode: 'user', // Use front camera on mobile
-          frameRate: { ideal: 15, min: 10 },
-          aspectRatio: { ideal: 4/3 }
-        } : {
-          width: { ideal: 640, min: 480 },
-          height: { ideal: 480, min: 360 },
-          frameRate: { ideal: 24, min: 15 }
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: { ideal: 44100 },
-          channelCount: { ideal: 1 }
-        }
-      });
+      // Try different media constraints for mobile-to-desktop compatibility
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: isMobile ? {
+            width: { ideal: 480, min: 240 },
+            height: { ideal: 360, min: 180 },
+            facingMode: 'user', // Use front camera on mobile
+            frameRate: { ideal: 15, min: 10 },
+            aspectRatio: { ideal: 4/3 }
+          } : {
+            width: { ideal: 640, min: 480 },
+            height: { ideal: 480, min: 360 },
+            frameRate: { ideal: 24, min: 15 }
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: { ideal: 44100 },
+            channelCount: { ideal: 1 }
+          }
+        });
+      } catch (error) {
+        console.log('⚠️ Primary media constraints failed, trying fallback...');
+        // Fallback to more basic constraints
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: isMobile ? {
+            width: { ideal: 320, min: 160 },
+            height: { ideal: 240, min: 120 },
+            facingMode: 'user',
+            frameRate: { ideal: 10, min: 5 }
+          } : {
+            width: { ideal: 480, min: 320 },
+            height: { ideal: 360, min: 240 },
+            frameRate: { ideal: 15, min: 10 }
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+      }
 
       localStreamRef.current = stream;
       setState(prev => ({ ...prev, localStream: stream }));
@@ -335,9 +369,17 @@ export const useChatRoom = () => {
         
         if (videoTracks.length > 0) {
           console.log('📹 Video track ready state:', videoTracks[0].readyState);
+          // Monitor video track quality
+          videoTracks[0].onended = () => console.log('📹 Video track ended');
+          videoTracks[0].onmute = () => console.log('📹 Video track muted');
+          videoTracks[0].onunmute = () => console.log('📹 Video track unmuted');
         }
         if (audioTracks.length > 0) {
           console.log('🎵 Audio track ready state:', audioTracks[0].readyState);
+          // Monitor audio track quality
+          audioTracks[0].onended = () => console.log('🎵 Audio track ended');
+          audioTracks[0].onmute = () => console.log('🎵 Audio track muted');
+          audioTracks[0].onunmute = () => console.log('🎵 Audio track unmuted');
         }
         
         setState(prev => ({ ...prev, remoteStream: event.streams[0] }));
@@ -423,8 +465,17 @@ export const useChatRoom = () => {
             setTimeout(() => {
               console.log('🔄 Attempting to restart ICE after disconnect...');
               peerConnectionRef.current?.restartIce();
-            }, 2000);
+            }, 1000); // Faster retry for disconnect
           }
+        } else if (iceState === 'checking') {
+          console.log('🔍 ICE connection checking - this is normal for mobile-to-desktop');
+          // Set a timeout for checking state
+          setTimeout(() => {
+            if (peerConnectionRef.current?.iceConnectionState === 'checking' && state.isInRoom) {
+              console.log('⏰ ICE checking timeout, forcing restart...');
+              peerConnectionRef.current.restartIce();
+            }
+          }, 8000); // 8 seconds timeout for checking state
         }
       };
 
