@@ -295,6 +295,22 @@ export const useChatRoom = () => {
           peerConnectionRef.current.restartIce();
         }
       }, 10000); // 10 seconds timeout for faster recovery
+      
+      // Add connection health monitoring
+      const healthCheckInterval = setInterval(() => {
+        if (peerConnectionRef.current && state.isInRoom) {
+          const connectionState = peerConnectionRef.current.connectionState;
+          const iceState = peerConnectionRef.current.iceConnectionState;
+          
+          console.log('🏥 Connection health check:', { connectionState, iceState });
+          
+          // If connection is failed or disconnected, try to recover
+          if ((connectionState === 'failed' || iceState === 'failed') && state.isInRoom) {
+            console.log('🔄 Health check detected connection failure, attempting recovery...');
+            peerConnectionRef.current.restartIce();
+          }
+        }
+      }, 15000); // Check every 15 seconds
 
       // Get local media stream with mobile-friendly constraints
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -351,6 +367,15 @@ export const useChatRoom = () => {
       stream.getTracks().forEach(track => {
         if (peerConnectionRef.current) {
           console.log('📹 Adding track to peer connection:', track.kind);
+          console.log('📹 Track enabled:', track.enabled);
+          console.log('📹 Track ready state:', track.readyState);
+          
+          // Ensure track is enabled before adding
+          if (!track.enabled) {
+            console.log('⚠️ Track was disabled, enabling it...');
+            track.enabled = true;
+          }
+          
           peerConnectionRef.current.addTrack(track, stream);
         }
       });
@@ -369,16 +394,52 @@ export const useChatRoom = () => {
         
         if (videoTracks.length > 0) {
           console.log('📹 Video track ready state:', videoTracks[0].readyState);
+          console.log('📹 Video track enabled:', videoTracks[0].enabled);
+          
           // Monitor video track quality
-          videoTracks[0].onended = () => console.log('📹 Video track ended');
-          videoTracks[0].onmute = () => console.log('📹 Video track muted');
+          videoTracks[0].onended = () => {
+            console.log('📹 Video track ended');
+            // Try to restart the connection if video track ends
+            if (state.isInRoom && peerConnectionRef.current) {
+              console.log('🔄 Video track ended, attempting to restart ICE...');
+              peerConnectionRef.current.restartIce();
+            }
+          };
+          videoTracks[0].onmute = () => {
+            console.log('📹 Video track muted');
+            // Don't let video track stay muted for too long
+            setTimeout(() => {
+              if (videoTracks[0].muted && state.isInRoom) {
+                console.log('🔄 Video track muted for too long, attempting to restart...');
+                peerConnectionRef.current?.restartIce();
+              }
+            }, 5000);
+          };
           videoTracks[0].onunmute = () => console.log('📹 Video track unmuted');
         }
         if (audioTracks.length > 0) {
           console.log('🎵 Audio track ready state:', audioTracks[0].readyState);
+          console.log('🎵 Audio track enabled:', audioTracks[0].enabled);
+          
           // Monitor audio track quality
-          audioTracks[0].onended = () => console.log('🎵 Audio track ended');
-          audioTracks[0].onmute = () => console.log('🎵 Audio track muted');
+          audioTracks[0].onended = () => {
+            console.log('🎵 Audio track ended');
+            // Try to restart the connection if audio track ends
+            if (state.isInRoom && peerConnectionRef.current) {
+              console.log('🔄 Audio track ended, attempting to restart ICE...');
+              peerConnectionRef.current.restartIce();
+            }
+          };
+          audioTracks[0].onmute = () => {
+            console.log('🎵 Audio track muted');
+            // Don't let audio track stay muted for too long
+            setTimeout(() => {
+              if (audioTracks[0].muted && state.isInRoom) {
+                console.log('🔄 Audio track muted for too long, attempting to restart...');
+                peerConnectionRef.current?.restartIce();
+              }
+            }, 5000);
+          };
           audioTracks[0].onunmute = () => console.log('🎵 Audio track unmuted');
         }
         
@@ -391,6 +452,7 @@ export const useChatRoom = () => {
         if (peerConnectionRef.current?.connectionState === 'connected') {
           console.log('✅ WebRTC connection established!');
           clearTimeout(connectionTimeout); // Clear timeout on successful connection
+          clearInterval(healthCheckInterval); // Clear health check on successful connection
         } else if (peerConnectionRef.current?.connectionState === 'failed') {
           console.error('❌ WebRTC connection failed');
           // Don't show error if we're already leaving the room
