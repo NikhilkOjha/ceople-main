@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { supabase } from '../integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Message {
   id: string;
@@ -28,6 +29,7 @@ interface ChatRoomState {
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://ceople-main.onrender.com';
 
 export const useChatRoom = () => {
+  const { user, session } = useAuth();
   const [state, setState] = useState<ChatRoomState>({
     isConnected: false,
     isInQueue: false,
@@ -51,15 +53,19 @@ export const useChatRoom = () => {
   // Initialize Socket.IO connection
   const initializeSocket = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('No authentication token');
+      // For guests, send guestUsername; for auth, send token
+      let auth;
+      if (user && (user as any).isGuest) {
+        auth = { guestUsername: user.user_metadata.username };
+      } else {
+        const { data: { session: supaSession } } = await supabase.auth.getSession();
+        if (!supaSession?.access_token) {
+          throw new Error('No authentication token');
+        }
+        auth = { token: supaSession.access_token };
       }
-
       const socket = io(BACKEND_URL, {
-        auth: {
-          token: session.access_token
-        },
+        auth,
         transports: ['polling', 'websocket'], // Try polling first, then upgrade to WebSocket
         timeout: 20000,
         forceNew: true,

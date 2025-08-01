@@ -36,26 +36,6 @@ const testimonials = [
     text: 'The video chat is so smooth, even on my phone.',
     author: 'Carlos, Brazil',
   },
-  {
-    text: 'I met someone from another continent. Super cool!',
-    author: 'Mia, Australia',
-  },
-  {
-    text: 'The design is beautiful and it just works.',
-    author: 'Jonas, Germany',
-  },
-  {
-    text: 'I use it every day to meet new people.',
-    author: 'Sara, USA',
-  },
-  {
-    text: 'No spam, no weird stuff, just real people.',
-    author: 'Priya, India',
-  },
-  {
-    text: 'The waitlist was worth it. Love the experience!',
-    author: 'Omar, Egypt',
-  },
 ];
 
 const features = [
