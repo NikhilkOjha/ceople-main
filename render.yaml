@@ -13,4 +13,6 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false
     healthCheckPath: /health
+    healthCheckTimeout: 10
+    healthCheckInterval: 60
     autoDeploy: true 

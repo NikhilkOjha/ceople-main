@@ -4,6 +4,7 @@
   "description": "Ceople chat application backend",
   "main": "server.js",
   "scripts": {
+    "prestart": "node -e \"if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) { console.error('❌ Missing required environment variables'); process.exit(1); }\"",
     "start": "node server.js",
     "dev": "nodemon server.js",
     "build": "echo 'No build step required'"

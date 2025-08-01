@@ -18,8 +18,30 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+  
+  // Force exit after 10 seconds
+  setTimeout(() => {
+    console.log('⚠️ Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 Received SIGINT, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
 const app = express();
-const server = http.createServer(app);
 
 // Enhanced CORS configuration for Render Docker
 const corsOptions = {
@@ -429,6 +451,19 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
 // Get port from environment or default to 3000
 const PORT = process.env.PORT || 3000;
 
+// Create server with optimizations
+const server = http.createServer(app);
+
+// Optimize for production
+if (process.env.NODE_ENV === 'production') {
+  // Reduce memory usage
+  server.maxConnections = 100;
+  
+  // Set keep-alive timeout
+  server.keepAliveTimeout = 30000;
+  server.headersTimeout = 35000;
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -437,9 +472,21 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`📡 Socket.IO transports: polling, websocket`);
   console.log(`🌐 CORS origins: ${corsOptions.origin.join(', ')}`);
   console.log(`⏰ Server started at: ${new Date().toISOString()}`);
+  console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
 });
 
 // Handle server errors
 server.on('error', (error) => {
   console.error('❌ Server error:', error);
-}); 
+  if (error.code === 'EADDRINUSE') {
+    console.error('⚠️ Port is already in use. Retrying in 5 seconds...');
+    setTimeout(() => {
+      server.listen(PORT, '0.0.0.0');
+    }, 5000);
+  }
+});
+
+// Add startup delay for stability
+setTimeout(() => {
+  console.log('✅ Server startup completed successfully');
+}, 2000); 

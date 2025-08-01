@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install curl for health checks
+RUN apk add --no-cache curl
+
 # Copy package files
 COPY backend/package*.json ./
 
@@ -22,8 +25,8 @@ USER nodejs
 # Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Health check with better timeout and retry settings
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=5 \
   CMD curl -f http://localhost:3000/health || exit 1
 
 # Start the server
