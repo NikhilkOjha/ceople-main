@@ -94,9 +94,18 @@ const waitingUsers = new Map();
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
+    const guestUsername = socket.handshake.auth.guestUsername;
     if (!token) {
-      console.log('Socket.IO auth error: No token provided');
-      return next(new Error('Authentication error: No token provided'));
+      // Allow guest/anonymous users
+      if (guestUsername) {
+        socket.userId = 'guest-' + Math.random().toString(36).slice(2);
+        socket.user = { id: socket.userId, username: guestUsername, isGuest: true };
+        console.log('Socket.IO guest auth:', socket.userId, guestUsername);
+        return next();
+      } else {
+        console.log('Socket.IO auth error: No token or guestUsername provided');
+        return next(new Error('Authentication error: No token or guestUsername provided'));
+      }
     }
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -132,6 +141,13 @@ io.on('connection', (socket) => {
       
       const { chatType = 'video' } = data;
       
+      if (socket.user && socket.user.isGuest) {
+        // For guests, just add to waitingUsers (no DB)
+        waitingUsers.set(socket.userId, { chatType, socket });
+        await findMatch(socket.userId, chatType);
+        return;
+      }
+
       // Remove user from any existing queue entry
       await supabase
         .from('user_queue')
@@ -168,6 +184,17 @@ io.on('connection', (socket) => {
     try {
       const { roomId, message, messageType = 'text' } = data;
       
+      if (socket.user && socket.user.isGuest) {
+        // For guests, just broadcast (don't save to DB)
+        socket.to(roomId).emit('new-message', {
+          roomId,
+          senderId: socket.userId,
+          content: message,
+          messageType,
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('messages')
         .insert({

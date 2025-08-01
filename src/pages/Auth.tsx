@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Mail, Lock, Chrome, User } from 'lucide-react';
 
 const Auth = () => {
-  const { user, signIn, signUp, loading } = useAuth();
+  const { user, signIn, signUp, loading, setGuest } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Redirect if already authenticated
   if (user && !loading) {
@@ -116,6 +117,14 @@ const Auth = () => {
     
     setIsLoading(false);
   };
+
+  // Helper to generate a random username
+  function randomUsername() {
+    const animals = ['Tiger', 'Panda', 'Wolf', 'Eagle', 'Lion', 'Bear', 'Fox', 'Otter', 'Falcon', 'Shark', 'Hawk', 'Koala', 'Penguin', 'Dolphin', 'Leopard', 'Cobra', 'Moose', 'Bison', 'Raven', 'Owl'];
+    const animal = animals[Math.floor(Math.random() * animals.length)];
+    const num = Math.floor(100 + Math.random() * 900);
+    return `Guest${animal}${num}`;
+  }
 
   if (loading) {
     return (
@@ -248,6 +257,18 @@ const Auth = () => {
                     <Chrome className="w-4 h-4 mr-2" />
                     Continue with Google
                   </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full mt-3 bg-white/20 border-white/30 text-white hover:bg-white/30 hover:text-white transition-all duration-200"
+                    onClick={() => {
+                      const username = randomUsername();
+                      setGuest(username);
+                      navigate('/chat');
+                    }}
+                  >
+                    Anonymous Chat
+                  </Button>
                 </form>
               </TabsContent>
               
@@ -346,6 +367,18 @@ const Auth = () => {
                   >
                     <Chrome className="w-4 h-4 mr-2" />
                     Continue with Google
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full mt-3 bg-white/20 border-white/30 text-white hover:bg-white/30 hover:text-white transition-all duration-200"
+                    onClick={() => {
+                      const username = randomUsername();
+                      setGuest(username);
+                      navigate('/chat');
+                    }}
+                  >
+                    Anonymous Chat
                   </Button>
                 </form>
               </TabsContent>

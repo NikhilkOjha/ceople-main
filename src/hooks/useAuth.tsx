@@ -2,23 +2,37 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+export type GuestUser = {
+  id: string;
+  user_metadata: { username: string };
+  isGuest: true;
+};
+
 interface AuthContextType {
-  user: User | null;
+  user: User | GuestUser | null;
   session: Session | null;
   signUp: (email: string, password: string, username?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<{ error: any }>;
+  setGuest: (username: string) => void;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | GuestUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check for guest user in localStorage
+    const guest = localStorage.getItem('guestUser');
+    if (guest) {
+      setUser(JSON.parse(guest));
+      setLoading(false);
+      return;
+    }
     console.log('🔐 AuthProvider: Initializing authentication...');
     
     // Check if we're on mobile
@@ -36,30 +50,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // THEN check for existing session
-    const initializeAuth = async () => {
-      try {
-        console.log('🔐 Checking for existing session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('❌ Error getting session:', error);
-        } else {
-          console.log('✅ Session check complete:', session?.user?.id ? 'User found' : 'No user');
-        }
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      } catch (error) {
-        console.error('❌ Error initializing auth:', error);
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const setGuest = (username: string) => {
+    const guestUser: GuestUser = {
+      id: 'guest-' + Math.random().toString(36).slice(2),
+      user_metadata: { username },
+      isGuest: true,
+    };
+    setUser(guestUser);
+    localStorage.setItem('guestUser', JSON.stringify(guestUser));
+  };
 
   const signUp = async (email: string, password: string, username?: string) => {
     console.log('🔐 Signing up user:', email, username);
@@ -70,9 +78,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: {
-          username: username
-        }
+        data: { username }
       }
     });
     
@@ -124,14 +130,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     console.log('🔐 Signing out user');
     
     try {
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('❌ Sign out error:', error);
-      } else {
-        console.log('✅ Sign out successful');
+      // Remove guest user if present
+      localStorage.removeItem('guestUser');
+      if (user && (user as GuestUser).isGuest) {
+        setUser(null);
+        setSession(null);
+        return { error: null };
       }
-      
+      const { error } = await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
       return { error };
     } catch (error) {
       console.error('❌ Sign out exception:', error);
@@ -146,6 +154,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signUp,
       signIn,
       signOut,
+      setGuest,
       loading
     }}>
       {children}
