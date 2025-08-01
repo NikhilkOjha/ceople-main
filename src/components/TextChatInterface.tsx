@@ -88,7 +88,7 @@ const TextChatInterface = () => {
       {/* Header */}
       <div className="flex justify-between items-center px-4 py-2 border-b bg-white/80" style={{backdropFilter: 'blur(8px)'}}>
         <div className="text-sm font-medium text-gray-700">
-          Hello, {user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}!
+          Hello, {user?.user_metadata?.username || (user as any)?.email?.split('@')[0] || 'User'}!
         </div>
         <Button variant="outline" size="sm" onClick={async () => {
           await signOut();

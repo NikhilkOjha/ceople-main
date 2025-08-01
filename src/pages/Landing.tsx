@@ -4,6 +4,7 @@ import { TypeAnimation } from 'react-type-animation';
 import { Rocket, Moon, Sun, Users, Globe, MessageCircle, Video, Shield, Smile } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 // Simple dark mode hook
 function useDarkMode() {
@@ -110,7 +111,7 @@ export default function LandingPage() {
     setEmailStatus('idle');
     if (!email) return;
     // Insert into Supabase
-    const { error } = await supabase.from('waitlist_emails').insert([{ email }]);
+    const { error } = await supabase.from('waitlist_emails').insert([{ email }] as TablesInsert<'waitlist_emails'>[]);
     if (error) {
       setEmailStatus('error');
     } else {
