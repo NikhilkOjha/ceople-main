@@ -115,7 +115,7 @@ export default function LandingPage() {
         Your browser does not support the video tag.
       </video>
       {/* Dark Overlay */}
-      <div className="absolute inset-0 bg-black/70 z-10 transition-colors duration-500" />
+      <div className="absolute inset-0 bg-black/30 z-10 transition-colors duration-500" />
       {/* Theme Toggle */}
       <button
         className="fixed top-4 right-4 z-30 bg-white/20 dark:bg-black/40 rounded-full p-2 shadow-lg hover:scale-110 transition"
@@ -125,7 +125,7 @@ export default function LandingPage() {
         {isDark ? <Sun className="w-6 h-6 text-yellow-300" /> : <Moon className="w-6 h-6 text-gray-800" />}
       </button>
       {/* Content */}
-      <div className="relative z-20 min-h-screen flex flex-col justify-between bg-gradient-to-br from-gray-900/60 via-black/60 to-gray-800/60 text-white px-2 sm:px-6 py-8 sm:py-12">
+      <div className="relative z-20 min-h-screen flex flex-col justify-between bg-gradient-to-br from-gray-900/20 via-black/20 to-gray-800/20 text-white px-2 sm:px-6 py-8 sm:py-12">
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: -40 }}
