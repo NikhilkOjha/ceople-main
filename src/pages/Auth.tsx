@@ -15,9 +15,12 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  console.log('🔐 Auth page loaded, user:', user, 'loading:', loading);
+
   // Redirect if already authenticated
   if (user && !loading) {
-    return <Navigate to="/" replace />;
+    console.log('🔐 User already authenticated, redirecting to /chat');
+    return <Navigate to="/chat" replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {

@@ -149,7 +149,10 @@ export default function LandingPage() {
               <Users className="w-5 h-5 text-green-400" />
               <span>{online.toLocaleString()} people online now</span>
             </motion.div>
-            <Link to="/auth">
+            <Link to="/auth" onClick={() => {
+              console.log('🚀 Start Chatting clicked, navigating to /auth');
+              alert('Navigating to auth page...');
+            }}>
               <motion.button
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.95 }}
