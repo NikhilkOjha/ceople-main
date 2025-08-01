@@ -62,6 +62,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Create server first
+const server = http.createServer(app);
+
 // Enhanced Socket.IO configuration for Render Docker
 const io = socketIo(server, {
   cors: {
@@ -450,9 +453,6 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
 
 // Get port from environment or default to 3000
 const PORT = process.env.PORT || 3000;
-
-// Create server with optimizations
-const server = http.createServer(app);
 
 // Optimize for production
 if (process.env.NODE_ENV === 'production') {
