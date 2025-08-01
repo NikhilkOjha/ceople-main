@@ -150,7 +150,7 @@ const ChatInterface = () => {
         <div className="fixed top-0 right-0 left-0 z-50 flex justify-end items-center bg-white/80 border-b border-gray-200 px-4 py-2" style={{backdropFilter: 'blur(8px)'}}>
           <Button variant="outline" size="sm" onClick={async () => {
             await signOut();
-            window.location.href = '/auth';
+            window.location.href = '/';
           }}>
             Log Out
           </Button>
@@ -239,7 +239,7 @@ const ChatInterface = () => {
         </div>
         <Button variant="outline" size="sm" onClick={async () => {
           await signOut();
-          window.location.href = '/auth';
+          window.location.href = '/';
         }}>
           Log Out
         </Button>

@@ -335,7 +335,49 @@ io.on('connection', (socket) => {
 // Find match function
 async function findMatch(userId, chatType) {
   try {
-    // Find another user waiting for the same chat type
+    // Check if user is a guest
+    const isGuest = userId.startsWith('guest-');
+    
+    if (isGuest) {
+      // For guest users, use in-memory matching
+      const waitingUser = Array.from(waitingUsers.entries())
+        .find(([id, data]) => 
+          id !== userId && 
+          data.chatType === chatType && 
+          id.startsWith('guest-')
+        );
+      
+      if (!waitingUser) {
+        console.log('No guest match found for user:', userId);
+        return;
+      }
+      
+      const otherUserId = waitingUser[0];
+      const roomId = 'room-' + Math.random().toString(36).slice(2);
+      
+      // Notify both users
+      const userSocket = activeUsers.get(userId);
+      const otherUserSocket = activeUsers.get(otherUserId);
+
+      if (userSocket) {
+        userSocket.join(roomId);
+        userSocket.emit('match-found', { roomId, chatType, isInitiator: true });
+      }
+
+      if (otherUserSocket) {
+        otherUserSocket.join(roomId);
+        otherUserSocket.emit('match-found', { roomId, chatType, isInitiator: false });
+      }
+
+      // Remove from waiting users
+      waitingUsers.delete(userId);
+      waitingUsers.delete(otherUserId);
+
+      console.log('Guest match created:', roomId, 'between', userId, 'and', otherUserId);
+      return;
+    }
+
+    // For authenticated users, use database
     const { data: waitingUser, error } = await supabase
       .from('user_queue')
       .select('user_id')

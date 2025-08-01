@@ -151,7 +151,6 @@ export default function LandingPage() {
             </motion.div>
             <Link to="/auth" onClick={() => {
               console.log('🚀 Start Chatting clicked, navigating to /auth');
-              alert('Navigating to auth page...');
             }}>
               <motion.button
                 whileHover={{ scale: 1.08 }}
