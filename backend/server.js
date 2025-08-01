@@ -168,7 +168,9 @@ io.on('connection', (socket) => {
       
       if (socket.user && socket.user.isGuest) {
         // For guests, just add to waitingUsers (no DB)
+        console.log('👤 Adding guest user to waiting queue:', socket.userId, 'chatType:', chatType);
         waitingUsers.set(socket.userId, { chatType, socket });
+        console.log('📊 Current waiting users:', Array.from(waitingUsers.keys()));
         await findMatch(socket.userId, chatType);
         return;
       }
@@ -340,6 +342,9 @@ async function findMatch(userId, chatType) {
     
     if (isGuest) {
       // For guest users, use in-memory matching
+      console.log('🔍 Looking for guest match for:', userId, 'chatType:', chatType);
+      console.log('📊 Available waiting users:', Array.from(waitingUsers.entries()).map(([id, data]) => ({ id, chatType: data.chatType })));
+      
       const waitingUser = Array.from(waitingUsers.entries())
         .find(([id, data]) => 
           id !== userId && 
