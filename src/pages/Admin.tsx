@@ -28,7 +28,8 @@ const Admin = () => {
   }
 
   // Simple admin check - you might want to implement proper role-based access
-  const isAdmin = user?.email === 'admin@ceople.com' || user?.user_metadata?.role === 'admin';
+  const isAdmin = (user && 'email' in user && user.email === 'admin@ceople.com') || 
+                  (user && 'user_metadata' in user && 'role' in user.user_metadata && user.user_metadata.role === 'admin');
 
   if (!isAdmin) {
     return (
@@ -76,7 +77,8 @@ const Admin = () => {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
-              Admin: {user?.user_metadata?.username || user?.email}
+              Admin: {user && 'user_metadata' in user ? user.user_metadata.username : 
+                      user && 'email' in user ? user.email : 'Unknown'}
             </span>
             <Button variant="outline" onClick={handleSignOut}>
               Sign Out
