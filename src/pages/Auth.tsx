@@ -19,8 +19,8 @@ const Auth = () => {
 
   // Redirect if already authenticated
   if (user && !loading) {
-    console.log('🔐 User already authenticated, redirecting to /chat');
-    return <Navigate to="/chat" replace />;
+    console.log('🔐 User already authenticated, redirecting to /');
+    return <Navigate to="/" replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -267,7 +267,7 @@ const Auth = () => {
                     onClick={() => {
                       const username = randomUsername();
                       setGuest(username);
-                      navigate('/chat');
+                      navigate('/');
                     }}
                   >
                     Anonymous Chat
@@ -378,7 +378,7 @@ const Auth = () => {
                     onClick={() => {
                       const username = randomUsername();
                       setGuest(username);
-                      navigate('/chat');
+                      navigate('/');
                     }}
                   >
                     Anonymous Chat
