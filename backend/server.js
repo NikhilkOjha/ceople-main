@@ -62,6 +62,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Body parser middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Create server first
 const server = http.createServer(app);
 
@@ -494,6 +498,321 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
 
     res.json(messages);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to submit feedback
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { rating, userId, roomId, chatType } = req.body;
+    
+    if (!rating || !['positive', 'negative'].includes(rating)) {
+      return res.status(400).json({ error: 'Invalid rating. Must be "positive" or "negative"' });
+    }
+
+    const { error } = await supabase
+      .from('feedback')
+      .insert({
+        rating,
+        user_id: userId || null,
+        room_id: roomId || null,
+        chat_type: chatType || 'unknown',
+        created_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error('Error saving feedback:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: 'Feedback submitted successfully' });
+  } catch (error) {
+    console.error('Error in feedback endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get feedback statistics
+app.get('/api/feedback/stats', async (req, res) => {
+  try {
+    // Get total count
+    const { count: totalCount, error: totalError } = await supabase
+      .from('feedback')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      console.error('Error getting total count:', totalError);
+      return res.status(500).json({ error: totalError.message });
+    }
+
+    // Get positive count
+    const { count: positiveCount, error: positiveError } = await supabase
+      .from('feedback')
+      .select('*', { count: 'exact', head: true })
+      .eq('rating', 'positive');
+
+    if (positiveError) {
+      console.error('Error getting positive count:', positiveError);
+      return res.status(500).json({ error: positiveError.message });
+    }
+
+    // Get negative count
+    const { count: negativeCount, error: negativeError } = await supabase
+      .from('feedback')
+      .select('*', { count: 'exact', head: true })
+      .eq('rating', 'negative');
+
+    if (negativeError) {
+      console.error('Error getting negative count:', negativeError);
+      return res.status(500).json({ error: negativeError.message });
+    }
+
+    const total = totalCount || 0;
+    const positive = positiveCount || 0;
+    const negative = negativeCount || 0;
+    const positivePercentage = total > 0 ? (positive / total) * 100 : 0;
+    const negativePercentage = total > 0 ? (negative / total) * 100 : 0;
+
+    res.json({
+      total,
+      positive,
+      negative,
+      positivePercentage,
+      negativePercentage
+    });
+  } catch (error) {
+    console.error('Error in feedback stats endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to submit email signup
+app.post('/api/email-signup', async (req, res) => {
+  try {
+    const { email, source = 'website' } = req.body;
+    
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+
+    const { error } = await supabase
+      .from('email_signups')
+      .insert({
+        email: email.toLowerCase().trim(),
+        source
+      });
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        return res.status(409).json({ error: 'Email already subscribed' });
+      }
+      console.error('Error saving email signup:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: 'Email subscribed successfully' });
+  } catch (error) {
+    console.error('Error in email signup endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get email signup statistics
+app.get('/api/email-signups/stats', async (req, res) => {
+  try {
+    // Get total count
+    const { count: totalCount, error: totalError } = await supabase
+      .from('email_signups')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      console.error('Error getting total count:', totalError);
+      return res.status(500).json({ error: totalError.message });
+    }
+
+    // Get recent signups (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { count: recentCount, error: recentError } = await supabase
+      .from('email_signups')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', sevenDaysAgo.toISOString());
+
+    if (recentError) {
+      console.error('Error getting recent count:', recentError);
+      return res.status(500).json({ error: recentError.message });
+    }
+
+    // Get signups by source
+    const { data: sourceData, error: sourceError } = await supabase
+      .from('email_signups')
+      .select('source, count')
+      .select('source')
+      .order('created_at', { ascending: false });
+
+    if (sourceError) {
+      console.error('Error getting source data:', sourceError);
+      return res.status(500).json({ error: sourceError.message });
+    }
+
+    // Group by source
+    const sourceStats = sourceData.reduce((acc, item) => {
+      acc[item.source] = (acc[item.source] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      total: totalCount || 0,
+      recent: recentCount || 0,
+      sourceStats
+    });
+  } catch (error) {
+    console.error('Error in email signups stats endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get chat sessions statistics
+app.get('/api/chat-sessions/stats', async (req, res) => {
+  try {
+    // Get total chat rooms created
+    const { count: totalRooms, error: totalError } = await supabase
+      .from('chat_rooms')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      console.error('Error getting total rooms:', totalError);
+      return res.status(500).json({ error: totalError.message });
+    }
+
+    // Get active chat rooms
+    const { count: activeRooms, error: activeError } = await supabase
+      .from('chat_rooms')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active');
+
+    if (activeError) {
+      console.error('Error getting active rooms:', activeError);
+      return res.status(500).json({ error: activeError.message });
+    }
+
+    // Get recent chat rooms (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { count: recentRooms, error: recentError } = await supabase
+      .from('chat_rooms')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', sevenDaysAgo.toISOString());
+
+    if (recentError) {
+      console.error('Error getting recent rooms:', recentError);
+      return res.status(500).json({ error: recentError.message });
+    }
+
+    // Get total participants
+    const { count: totalParticipants, error: participantsError } = await supabase
+      .from('chat_participants')
+      .select('*', { count: 'exact', head: true });
+
+    if (participantsError) {
+      console.error('Error getting participants:', participantsError);
+      return res.status(500).json({ error: participantsError.message });
+    }
+
+    res.json({
+      totalRooms: totalRooms || 0,
+      activeRooms: activeRooms || 0,
+      recentRooms: recentRooms || 0,
+      totalParticipants: totalParticipants || 0
+    });
+  } catch (error) {
+    console.error('Error in chat sessions stats endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get user location statistics
+app.get('/api/user-locations/stats', async (req, res) => {
+  try {
+    // Get total locations
+    const { count: totalLocations, error: totalError } = await supabase
+      .from('user_locations')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      console.error('Error getting total locations:', totalError);
+      return res.status(500).json({ error: totalError.message });
+    }
+
+    // Get unique countries
+    const { data: countryData, error: countryError } = await supabase
+      .from('user_locations')
+      .select('country')
+      .not('country', 'is', null);
+
+    if (countryError) {
+      console.error('Error getting country data:', countryError);
+      return res.status(500).json({ error: countryError.message });
+    }
+
+    // Group by country
+    const countryStats = countryData.reduce((acc, item) => {
+      acc[item.country] = (acc[item.country] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Get top 10 countries
+    const topCountries = Object.entries(countryStats)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([country, count]) => ({ country, count }));
+
+    res.json({
+      totalLocations: totalLocations || 0,
+      uniqueCountries: Object.keys(countryStats).length,
+      topCountries,
+      countryStats
+    });
+  } catch (error) {
+    console.error('Error in user locations stats endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to submit user location
+app.post('/api/user-location', async (req, res) => {
+  try {
+    const { userId, ipAddress, locationData } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const { error } = await supabase
+      .from('user_locations')
+      .insert({
+        user_id: userId,
+        ip_address: ipAddress,
+        country: locationData?.country,
+        region: locationData?.region,
+        city: locationData?.city,
+        latitude: locationData?.latitude,
+        longitude: locationData?.longitude,
+        timezone: locationData?.timezone,
+        user_agent: req.headers['user-agent']
+      });
+
+    if (error) {
+      console.error('Error saving user location:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: 'Location saved successfully' });
+  } catch (error) {
+    console.error('Error in user location endpoint:', error);
     res.status(500).json({ error: error.message });
   }
 });

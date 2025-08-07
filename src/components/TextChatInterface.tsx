@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useChatRoom } from '@/hooks/useChatRoom';
 import { useAuth } from '@/hooks/useAuth';
+import FeedbackPoll from './FeedbackPoll';
 
 const TextChatInterface = () => {
   const { user, signOut } = useAuth();
@@ -20,11 +21,25 @@ const TextChatInterface = () => {
   } = useChatRoom();
 
   const [messageInput, setMessageInput] = useState('');
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [wasInRoom, setWasInRoom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Track when user was in a room to show feedback
+  useEffect(() => {
+    if (isInRoom) {
+      setWasInRoom(true);
+    } else if (wasInRoom && !isInQueue) {
+      // User just left a room, show feedback after a short delay
+      setTimeout(() => {
+        setShowFeedback(true);
+      }, 500);
+    }
+  }, [isInRoom, isInQueue, wasInRoom]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +47,37 @@ const TextChatInterface = () => {
       sendMessage(messageInput);
       setMessageInput('');
     }
+  };
+
+  const handleFeedback = async (rating: 'positive' | 'negative') => {
+    try {
+      // Send feedback to backend
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rating,
+          userId: user?.id || null,
+          roomId: roomId || null,
+          chatType: 'text'
+        }),
+      });
+
+      if (response.ok) {
+        console.log('Feedback submitted successfully');
+      } else {
+        console.error('Failed to submit feedback');
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    }
+  };
+
+  const handleFeedbackClose = () => {
+    setShowFeedback(false);
+    setWasInRoom(false);
   };
 
   if (!isInRoom) {
@@ -79,6 +125,13 @@ const TextChatInterface = () => {
             )}
           </CardContent>
         </Card>
+        
+        {/* Feedback Poll */}
+        <FeedbackPoll
+          isVisible={showFeedback}
+          onFeedback={handleFeedback}
+          onSkip={handleFeedbackClose}
+        />
       </div>
     );
   }
@@ -97,6 +150,13 @@ const TextChatInterface = () => {
           Log Out
         </Button>
       </div>
+      
+      {/* Feedback Poll */}
+      <FeedbackPoll
+        isVisible={showFeedback}
+        onFeedback={handleFeedback}
+        onSkip={handleFeedbackClose}
+      />
       {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-3">

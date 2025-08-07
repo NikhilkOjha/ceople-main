@@ -3,8 +3,7 @@ import { motion } from 'framer-motion';
 import { TypeAnimation } from 'react-type-animation';
 import { Rocket, Moon, Sun, Users, Globe, MessageCircle, Video, Shield, Smile } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import type { TablesInsert } from '@/integrations/supabase/types';
+import EmailSignupForm from '@/components/EmailSignupForm';
 
 // Simple dark mode hook
 function useDarkMode() {
@@ -82,23 +81,6 @@ export default function LandingPage() {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
-  // Email form state
-  const [email, setEmail] = useState('');
-  const [emailStatus, setEmailStatus] = useState<'idle'|'success'|'error'>('idle');
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setEmailStatus('idle');
-    if (!email) return;
-    // Insert into Supabase
-    const { error } = await supabase.from('waitlist_emails').insert([{ email }] as TablesInsert<'waitlist_emails'>[]);
-    if (error) {
-      setEmailStatus('error');
-    } else {
-      setEmailStatus('success');
-      setEmail('');
-    }
-  };
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -173,7 +155,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-stretch">
             {testimonials.map((t, i) => (
               <div key={i} className="bg-white/10 rounded-xl p-5 shadow flex-1 flex flex-col justify-between">
-                <p className="text-lg italic mb-2">“{t.text}”</p>
+                <p className="text-lg italic mb-2">"{t.text}"</p>
                 <span className="text-xs text-gray-300">– {t.author}</span>
               </div>
             ))}
@@ -205,34 +187,16 @@ export default function LandingPage() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.4 }}
-          className="max-w-lg mx-auto bg-white/10 rounded-xl p-6 shadow-lg mb-8"
+          className="max-w-lg mx-auto mb-8"
         >
-          <h3 className="text-2xl font-bold mb-2">Join the Waitlist</h3>
-          <p className="text-sm text-gray-300 mb-4">Get early access and updates. No spam, ever.</p>
-          <form onSubmit={handleEmailSubmit} className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="email"
-              required
-              placeholder="Your email"
-              className="flex-1 px-4 py-2 rounded bg-white/80 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
-              value={email}
-              onChange={e => { setEmail(e.target.value); setEmailStatus('idle'); }}
-              disabled={emailStatus === 'success'}
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold transition"
-              disabled={emailStatus === 'success'}
-            >
-              {emailStatus === 'success' ? 'Thank you!' : 'Notify Me'}
-            </button>
-          </form>
-          {emailStatus === 'success' && (
-            <p className="text-green-400 mt-2 text-sm">You’re on the list! 🎉</p>
-          )}
-          {emailStatus === 'error' && (
-            <p className="text-red-400 mt-2 text-sm">Something went wrong. Please try again.</p>
-          )}
+          <EmailSignupForm
+            title="Join the Waitlist"
+            description="Get early access and updates. No spam, ever."
+            placeholder="Your email"
+            buttonText="Notify Me"
+            source="landing"
+            className="bg-white/10 backdrop-blur-md border-white/20 text-white"
+          />
         </motion.div>
       </div>
     </div>

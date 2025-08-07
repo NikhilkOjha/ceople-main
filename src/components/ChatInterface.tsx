@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { useChatRoom } from '@/hooks/useChatRoom';
 import { useAuth } from '@/hooks/useAuth';
 import { Video, VideoOff, Mic, MicOff, SkipForward, X, Send, Phone, PhoneOff, Monitor } from 'lucide-react';
+import FeedbackPoll from './FeedbackPoll';
 
 const ChatInterface = () => {
   const { user, signOut } = useAuth();
@@ -35,6 +36,8 @@ const ChatInterface = () => {
   const [messageInput, setMessageInput] = useState('');
   const [permissionRequested, setPermissionRequested] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [wasInRoom, setWasInRoom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -81,6 +84,18 @@ const ChatInterface = () => {
       setPermissionRequested(false);
     }
   }, [isInRoom, isInQueue]);
+
+  // Track when user was in a room to show feedback
+  useEffect(() => {
+    if (isInRoom) {
+      setWasInRoom(true);
+    } else if (wasInRoom && !isInQueue) {
+      // User just left a room, show feedback after a short delay
+      setTimeout(() => {
+        setShowFeedback(true);
+      }, 500);
+    }
+  }, [isInRoom, isInQueue, wasInRoom]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -140,6 +155,37 @@ const ChatInterface = () => {
       sendMessage(messageInput);
       setMessageInput('');
     }
+  };
+
+  const handleFeedback = async (rating: 'positive' | 'negative') => {
+    try {
+      // Send feedback to backend
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rating,
+          userId: user?.id || null,
+          roomId: roomId || null,
+          chatType: 'video'
+        }),
+      });
+
+      if (response.ok) {
+        console.log('Feedback submitted successfully');
+      } else {
+        console.error('Failed to submit feedback');
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    }
+  };
+
+  const handleFeedbackClose = () => {
+    setShowFeedback(false);
+    setWasInRoom(false);
   };
 
   // If not connected to a room, show connection interface
@@ -225,6 +271,13 @@ const ChatInterface = () => {
             </CardContent>
           </Card>
         </div>
+        
+        {/* Feedback Poll */}
+        <FeedbackPoll
+          isVisible={showFeedback}
+          onFeedback={handleFeedback}
+          onSkip={handleFeedbackClose}
+        />
       </div>
     );
   }
@@ -245,6 +298,13 @@ const ChatInterface = () => {
         </Button>
       </div>
       <div className="pt-14"> {/* Add padding to avoid header overlap */}
+        
+        {/* Feedback Poll */}
+        <FeedbackPoll
+          isVisible={showFeedback}
+          onFeedback={handleFeedback}
+          onSkip={handleFeedbackClose}
+        />
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-2rem)]">
           
           {/* Video Area */}
