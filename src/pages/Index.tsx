@@ -7,10 +7,14 @@ import { Video, MessageCircle, Users, Shield } from 'lucide-react';
 const Index = () => {
   const { user, signOut, loading } = useAuth();
 
-  // Redirect to auth if not authenticated
+  // Redirect to landing page if not authenticated
   if (!user && !loading) {
-    return <Navigate to="/auth" replace />;
+    console.log('🔐 No user found, redirecting to landing page');
+    return <Navigate to="/" replace />;
   }
+
+  // Allow both regular users and guest users
+  const username = user?.user_metadata?.username || (user && 'email' in user ? user.email : 'User');
 
   if (loading) {
     return (
@@ -34,7 +38,7 @@ const Index = () => {
           </h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
-              Welcome back!
+              Welcome back, {username}!
             </span>
             <Button variant="outline" onClick={handleSignOut}>
               Sign Out

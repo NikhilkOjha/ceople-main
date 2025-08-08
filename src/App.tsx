@@ -28,8 +28,12 @@ const App = () => (
         <SocialBar />
         <BrowserRouter>
           <Routes>
+            {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
+            
+            {/* Protected Routes */}
+            <Route path="/dashboard" element={<Index />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/chat" element={<ChatInterface />} />
             <Route path="/text-chat" element={<TextChatInterface />} />

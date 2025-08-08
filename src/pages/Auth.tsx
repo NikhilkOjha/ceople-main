@@ -19,8 +19,8 @@ const Auth = () => {
 
   // Redirect if already authenticated
   if (user && !loading) {
-    console.log('🔐 User already authenticated, redirecting to /');
-    return <Navigate to="/" replace />;
+    console.log('🔐 User already authenticated, redirecting to /dashboard');
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
