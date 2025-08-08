@@ -349,11 +349,11 @@ async function findMatch(userId, chatType) {
       console.log('🔍 Looking for guest match for:', userId, 'chatType:', chatType);
       console.log('📊 Available waiting users:', Array.from(waitingUsers.entries()).map(([id, data]) => ({ id, chatType: data.chatType })));
       
+      // Find any waiting user with matching chat type
       const waitingUser = Array.from(waitingUsers.entries())
         .find(([id, data]) => 
           id !== userId && 
-          data.chatType === chatType && 
-          id.startsWith('guest-')
+          data.chatType === chatType
         );
       
       if (!waitingUser) {
@@ -386,7 +386,40 @@ async function findMatch(userId, chatType) {
       return;
     }
 
-    // For authenticated users, use database
+    // First check for any waiting users in memory (could be guests or authenticated)
+    const memoryWaitingUser = Array.from(waitingUsers.entries())
+      .find(([id, data]) => 
+        id !== userId && 
+        data.chatType === chatType
+      );
+
+    if (memoryWaitingUser) {
+      const otherUserId = memoryWaitingUser[0];
+      const roomId = 'room-' + Math.random().toString(36).slice(2);
+      
+      // Notify both users
+      const userSocket = activeUsers.get(userId);
+      const otherUserSocket = activeUsers.get(otherUserId);
+
+      if (userSocket) {
+        userSocket.join(roomId);
+        userSocket.emit('match-found', { roomId, chatType, isInitiator: true });
+      }
+
+      if (otherUserSocket) {
+        otherUserSocket.join(roomId);
+        otherUserSocket.emit('match-found', { roomId, chatType, isInitiator: false });
+      }
+
+      // Remove from waiting users
+      waitingUsers.delete(userId);
+      waitingUsers.delete(otherUserId);
+
+      console.log('Mixed match created:', roomId, 'between', userId, 'and', otherUserId);
+      return;
+    }
+
+    // If no memory matches, check database for authenticated users
     const { data: waitingUser, error } = await supabase
       .from('user_queue')
       .select('user_id')
