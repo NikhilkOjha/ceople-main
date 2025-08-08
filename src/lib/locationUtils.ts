@@ -73,7 +73,7 @@ export const saveUserLocation = async (userId: string): Promise<void> => {
     const locationData = await getUserLocation();
     const ipAddress = getClientIP();
 
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/user-location`, {
+    const response = await fetch(`https://ceople-main.onrender.com/api/user-location`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
