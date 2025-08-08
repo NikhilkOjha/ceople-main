@@ -18,7 +18,7 @@ const FeedbackDashboard: React.FC = () => {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/feedback/stats`);
+      const response = await fetch(`https://ceople-main.onrender.com/api/feedback/stats`);
       if (response.ok) {
         const data = await response.json();
         setStats(data);

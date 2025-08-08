@@ -52,7 +52,7 @@ const TextChatInterface = () => {
   const handleFeedback = async (rating: 'positive' | 'negative') => {
     try {
       // Send feedback to backend
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/feedback`, {
+      const response = await fetch(`https://ceople-main.onrender.com/api/feedback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
